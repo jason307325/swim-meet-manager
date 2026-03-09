@@ -206,7 +206,7 @@ select {
   flex-wrap: wrap;
   gap: 10px;
   margin: 15px 0;
-  min-height: 60px;
+  min-height: 80px;
   background: white;
   padding: 15px;
   border-radius: 5px;
@@ -230,33 +230,53 @@ select {
   transform: scale(1.05);
 }
 
-.event-pool {
+.event-category {
+  margin-top: 15px;
+  background: white;
+  border-radius: 5px;
+  padding: 15px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.event-category h4 {
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 5px;
+}
+
+.event-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 15px;
-  padding: 15px;
-  background: #f0f0f0;
-  border-radius: 5px;
-  max-height: 200px;
-  overflow-y: auto;
+  gap: 8px;
 }
 
 .event-tag {
-  background: #95a5a6;
-  color: white;
-  padding: 5px 12px;
+  background: #ecf0f1;
+  color: #2c3e50;
+  padding: 6px 12px;
   border-radius: 15px;
   cursor: pointer;
   font-size: 13px;
+  border: 1px solid #bdc3c7;
+  transition: all 0.2s;
 }
 
 .event-tag:hover {
-  background: #7f8c8d;
+  background: #3498db;
+  color: white;
+  border-color: #3498db;
+  transform: translateY(-2px);
 }
 
 .event-tag.selected {
   background: #e67e22;
+  color: white;
+  border-color: #e67e22;
+}
+
+.event-tag.selected:hover {
+  background: #d35400;
 }
 
 .print-buttons {
@@ -349,7 +369,7 @@ select {
   
   <div class="event-order-panel">
     <h4>📋 比賽項目順序設定</h4>
-    <p>拖曳項目調整順序，點擊下方項目加入排序</p>
+    <p>拖曳項目調整順序，點擊下方分類標籤加入排序</p>
     
     <div class="event-order-list" id="eventOrderList" ondragover="allowDrop(event)" ondrop="drop(event)">
       <!-- 已排序的項目會顯示在這裡 -->
@@ -357,11 +377,74 @@ select {
     
     <div style="margin: 10px 0;">
       <button onclick="clearEventOrder()">清除所有順序</button>
-      <button onclick="resetToAgeOrder()">依年齡排序</button>
+      <button onclick="resetToDefaultOrder()">恢復預設順序</button>
     </div>
     
-    <div class="event-pool" id="eventPool">
-      <!-- 可選擇的項目會動態產生 -->
+    <!-- 自由式 -->
+    <div class="event-category">
+      <h4>🏊 自由式</h4>
+      <div class="event-tags">
+        <span class="event-tag" onclick="addToOrder('50自')">50自</span>
+        <span class="event-tag" onclick="addToOrder('100自')">100自</span>
+        <span class="event-tag" onclick="addToOrder('200自')">200自</span>
+        <span class="event-tag" onclick="addToOrder('400自')">400自</span>
+        <span class="event-tag" onclick="addToOrder('800自')">800自</span>
+        <span class="event-tag" onclick="addToOrder('1500自')">1500自</span>
+      </div>
+    </div>
+    
+    <!-- 仰式 -->
+    <div class="event-category">
+      <h4>🏊 仰式</h4>
+      <div class="event-tags">
+        <span class="event-tag" onclick="addToOrder('50仰')">50仰</span>
+        <span class="event-tag" onclick="addToOrder('100仰')">100仰</span>
+        <span class="event-tag" onclick="addToOrder('200仰')">200仰</span>
+      </div>
+    </div>
+    
+    <!-- 蛙式 -->
+    <div class="event-category">
+      <h4>🏊 蛙式</h4>
+      <div class="event-tags">
+        <span class="event-tag" onclick="addToOrder('50蛙')">50蛙</span>
+        <span class="event-tag" onclick="addToOrder('100蛙')">100蛙</span>
+        <span class="event-tag" onclick="addToOrder('200蛙')">200蛙</span>
+      </div>
+    </div>
+    
+    <!-- 蝶式 -->
+    <div class="event-category">
+      <h4>🏊 蝶式</h4>
+      <div class="event-tags">
+        <span class="event-tag" onclick="addToOrder('50蝶')">50蝶</span>
+        <span class="event-tag" onclick="addToOrder('100蝶')">100蝶</span>
+        <span class="event-tag" onclick="addToOrder('200蝶')">200蝶</span>
+      </div>
+    </div>
+    
+    <!-- 混合式 -->
+    <div class="event-category">
+      <h4>🏊 混合式</h4>
+      <div class="event-tags">
+        <span class="event-tag" onclick="addToOrder('100混')">100混</span>
+        <span class="event-tag" onclick="addToOrder('200混')">200混</span>
+        <span class="event-tag" onclick="addToOrder('400混')">400混</span>
+      </div>
+    </div>
+    
+    <!-- 接力 -->
+    <div class="event-category">
+      <h4>🏊 接力</h4>
+      <div class="event-tags">
+        <span class="event-tag" onclick="addToOrder('4x50混接')">4x50混接</span>
+        <span class="event-tag" onclick="addToOrder('4x50自接')">4x50自接</span>
+        <span class="event-tag" onclick="addToOrder('4x100混接')">4x100混接</span>
+        <span class="event-tag" onclick="addToOrder('4x100自接')">4x100自接</span>
+        <span class="event-tag" onclick="addToOrder('兩男兩女4x50自接')">兩男兩女4x50自接</span>
+        <span class="event-tag" onclick="addToOrder('兩男兩女4x50混接')">兩男兩女4x50混接</span>
+        <span class="event-tag" onclick="addToOrder('親子接力')">親子接力</span>
+      </div>
     </div>
   </div>
   
@@ -395,9 +478,20 @@ const AppState = {
   originalData: null,
   isLoading: false,
   lastGenerated: null,
-  eventOrder: [], // 儲存項目順序
-  allEvents: new Set() // 所有出現過的項目
+  eventOrder: [] // 儲存項目順序
 };
+
+// ==================== 預設比賽項目順序 ====================
+const DEFAULT_EVENT_ORDER = [
+  '50自', '100自', '200自', '400自', '800自', '1500自',
+  '50仰', '100仰', '200仰',
+  '50蛙', '100蛙', '200蛙',
+  '50蝶', '100蝶', '200蝶',
+  '100混', '200混', '400混',
+  '4x50混接', '4x50自接', '4x100混接', '4x100自接',
+  '兩男兩女4x50自接', '兩男兩女4x50混接',
+  '親子接力'
+];
 
 // ==================== 最小時間常數 ====================
 const MIN_TIME = {
@@ -451,7 +545,6 @@ async function handleFileUpload(e) {
 
   showLoading(true);
   AppState.swimmers = [];
-  AppState.allEvents.clear();
   
   try {
     const data = await readFileAsync(file);
@@ -469,14 +562,6 @@ async function handleFileUpload(e) {
     
     // 轉換資料
     AppState.swimmers = parseSwimmerData(headers, dataRows);
-    
-    // 收集所有項目
-    AppState.swimmers.forEach(s => {
-      if (s.Event) AppState.allEvents.add(s.Event);
-    });
-    
-    // 初始化項目順序（依年齡排序）
-    initializeEventOrder();
     
     updateSummary();
     showMessage(`✅ 成功匯入 ${AppState.swimmers.length} 位選手`, false);
@@ -650,9 +735,6 @@ function updateAgeGroupSettings() {
   AppState.swimmers.forEach(s => {
     s.AgeGroup = getAgeGroup(s.Age);
   });
-  
-  // 重新初始化項目順序
-  initializeEventOrder();
 }
 
 function getAgeGroup(age) {
@@ -709,43 +791,8 @@ function getAgeGroup(age) {
 }
 
 // ==================== 項目順序管理 ====================
-function initializeEventOrder() {
-  // 依年齡組別和項目分類
-  const events = new Set();
-  AppState.swimmers.forEach(s => {
-    if (s.AgeGroup) {
-      events.add(`${s.AgeGroup} ${s.Event}`);
-    }
-  });
-  
-  // 轉換為陣列並依年齡排序
-  AppState.eventOrder = Array.from(events).sort((a, b) => {
-    const ageA = extractAgeFromEvent(a);
-    const ageB = extractAgeFromEvent(b);
-    return ageA - ageB;
-  });
-  
-  renderEventOrder();
-}
-
-function extractAgeFromEvent(eventStr) {
-  // 從事件字串中提取年齡數字進行排序
-  const ageMatch = eventStr.match(/(\d+)/);
-  if (ageMatch) return parseInt(ageMatch[1]);
-  
-  // 特殊組別優先順序
-  if (eventStr.includes('幼兒園')) return 0;
-  if (eventStr.includes('U10')) return 10;
-  if (eventStr.includes('U12')) return 12;
-  if (eventStr.includes('U15')) return 15;
-  if (eventStr.includes('OPEN')) return 99;
-  
-  return 50;
-}
-
 function renderEventOrder() {
   const orderList = document.getElementById('eventOrderList');
-  const eventPool = document.getElementById('eventPool');
   
   // 顯示已排序的項目
   orderList.innerHTML = '';
@@ -760,23 +807,23 @@ function renderEventOrder() {
     orderList.appendChild(div);
   });
   
-  // 顯示可選擇的項目（所有出現過的項目）
-  const allEvents = new Set();
-  AppState.swimmers.forEach(s => {
-    if (s.AgeGroup) {
-      allEvents.add(`${s.AgeGroup} ${s.Event}`);
-    }
+  // 更新標籤的選中狀態
+  updateTagSelection();
+}
+
+function updateTagSelection() {
+  // 移除所有標籤的 selected 類別
+  document.querySelectorAll('.event-tag').forEach(tag => {
+    tag.classList.remove('selected');
   });
   
-  eventPool.innerHTML = '';
-  Array.from(allEvents).sort().forEach(event => {
-    if (!AppState.eventOrder.includes(event)) {
-      const span = document.createElement('span');
-      span.className = 'event-tag';
-      span.textContent = event;
-      span.onclick = () => addToOrder(event);
-      eventPool.appendChild(span);
-    }
+  // 為已選中的項目加上 selected 類別
+  AppState.eventOrder.forEach(event => {
+    document.querySelectorAll('.event-tag').forEach(tag => {
+      if (tag.textContent === event) {
+        tag.classList.add('selected');
+      }
+    });
   });
 }
 
@@ -826,8 +873,9 @@ function clearEventOrder() {
   renderEventOrder();
 }
 
-function resetToAgeOrder() {
-  initializeEventOrder();
+function resetToDefaultOrder() {
+  AppState.eventOrder = [...DEFAULT_EVENT_ORDER];
+  renderEventOrder();
 }
 
 // ==================== 分組處理 ====================
@@ -895,61 +943,81 @@ function generateHeats() {
 
     // 依照設定的順序顯示項目
     const orderedEvents = AppState.eventOrder.length > 0 ? 
-      AppState.eventOrder.filter(e => groups[e]) : 
-      Object.keys(groups).sort();
+      AppState.eventOrder : 
+      DEFAULT_EVENT_ORDER;
 
-    for (const eventName of orderedEvents) {
-      const athletes = groups[eventName];
-      if (!athletes) continue;
+    // 先收集所有有選手的項目
+    const availableEvents = new Set();
+    Object.keys(groups).forEach(key => {
+      const eventName = key.split(' ').slice(1).join(' '); // 去掉年齡組別
+      availableEvents.add(eventName);
+    });
+
+    // 只顯示有選手的項目
+    for (const baseEvent of orderedEvents) {
+      if (!availableEvents.has(baseEvent)) continue;
       
-      const heats = serpentineSort(athletes, lanes);
-      totalHeats += heats.length;
-
-      html += `<h2 style="background: #3498db; color: white; padding: 10px; border-radius: 5px;">🏊 ${eventName}</h2>`;
-
-      heats.forEach((heat, heatIndex) => {
-        const validAthletes = heat.filter(cell => cell !== undefined);
-        
-        html += `
-          <div style="margin-bottom: 30px;">
-            <h3 style="color: #2c3e50;">第 ${heatIndex + 1} 組 (共 ${validAthletes.length} 人)</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>水道</th>
-                  <th>姓名</th>
-                  <th>單位</th>
-                  <th>年齡</th>
-                  <th>報名成績</th>
-                  <th>比賽成績</th>
-                  <th>名次</th>
-                </tr>
-              </thead>
-              <tbody>
-        `;
-
-        const laneOrder = LANE_ORDERS[lanes] || LANE_ORDERS[8];
-        
-        laneOrder.forEach((lane, idx) => {
-          const athlete = heat[idx];
-          if (athlete) {
-            const laneClass = `lane-${lane}`;
-            html += `
-              <tr data-athlete-id="${athlete.Name}_${athlete.Unit}" class="${laneClass}">
-                <td><strong>${lane}</strong></td>
-                <td>${athlete.Name || '--'}</td>
-                <td>${athlete.Unit || '--'}</td>
-                <td>${athlete.Age || '--'}</td>
-                <td>${athlete.SeedTime || '--:--.--'}</td>
-                <td><input class="score" placeholder="--:--.--" onchange="updateScore(this, '${heatIndex}_${idx}')"></td>
-                <td><input class="rank" placeholder="名次" onchange="updateRank(this)" readonly></td>
-              </tr>
-            `;
-          }
+      // 找出所有同項目但不同年齡組的賽事
+      const eventGroups = Object.entries(groups)
+        .filter(([key]) => key.includes(baseEvent))
+        .sort(([a], [b]) => {
+          const ageA = a.split(' ')[0];
+          const ageB = b.split(' ')[0];
+          const aIndex = AGE_GROUP_ORDER.indexOf(ageA);
+          const bIndex = AGE_GROUP_ORDER.indexOf(ageB);
+          return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
         });
 
-        html += '</tbody></table></div>';
-      });
+      for (const [fullEventName, athletes] of eventGroups) {
+        const heats = serpentineSort(athletes, lanes);
+        totalHeats += heats.length;
+
+        html += `<h2 style="background: #3498db; color: white; padding: 10px; border-radius: 5px;">🏊 ${fullEventName}</h2>`;
+
+        heats.forEach((heat, heatIndex) => {
+          const validAthletes = heat.filter(cell => cell !== undefined);
+          
+          html += `
+            <div style="margin-bottom: 30px;">
+              <h3 style="color: #2c3e50;">第 ${heatIndex + 1} 組 (共 ${validAthletes.length} 人)</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>水道</th>
+                    <th>姓名</th>
+                    <th>單位</th>
+                    <th>年齡</th>
+                    <th>報名成績</th>
+                    <th>比賽成績</th>
+                    <th>名次</th>
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+
+          const laneOrder = LANE_ORDERS[lanes] || LANE_ORDERS[8];
+          
+          laneOrder.forEach((lane, idx) => {
+            const athlete = heat[idx];
+            if (athlete) {
+              const laneClass = `lane-${lane}`;
+              html += `
+                <tr data-athlete-id="${athlete.Name}_${athlete.Unit}" class="${laneClass}">
+                  <td><strong>${lane}</strong></td>
+                  <td>${athlete.Name || '--'}</td>
+                  <td>${athlete.Unit || '--'}</td>
+                  <td>${athlete.Age || '--'}</td>
+                  <td>${athlete.SeedTime || '--:--.--'}</td>
+                  <td><input class="score" placeholder="--:--.--" onchange="updateScore(this, '${heatIndex}_${idx}')"></td>
+                  <td><input class="rank" placeholder="名次" onchange="updateRank(this)" readonly></td>
+                </tr>
+              `;
+            }
+          });
+
+          html += '</tbody></table></div>';
+        });
+      }
     }
 
     document.getElementById("output").innerHTML = html;
@@ -1117,7 +1185,6 @@ function exportToExcel() {
         if (cells.length >= 7) {
           results.push({
             '項目': title.replace('🏊', '').trim(),
-            '組別': cells[0].textContent,
             '水道': cells[0].textContent,
             '姓名': cells[1].textContent,
             '單位': cells[2].textContent,
@@ -1180,6 +1247,9 @@ function updateSummary(heatsCount = 0) {
 // ==================== 初始化 ====================
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Swim Meet Manager initialized');
+  // 設定預設項目順序
+  AppState.eventOrder = [...DEFAULT_EVENT_ORDER];
+  renderEventOrder();
   updateSummary();
   updateAgeGroupSettings();
 });
