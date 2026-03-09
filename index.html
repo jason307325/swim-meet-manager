@@ -550,24 +550,37 @@ async function handleFileUpload(e) {
     const data = await readFileAsync(file);
     const workbook = XLSX.read(data, { type: 'array' });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+    
+    // 修正：使用 sheet_to_json 並保留標題列
+    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+    
+    console.log('Excel原始資料:', jsonData); // 除錯用
 
     if (jsonData.length < 2) {
       throw new Error('Excel 檔案為空或格式錯誤');
     }
 
-    // 解析標題列
-    const headers = jsonData[0];
-    const dataRows = jsonData.slice(1);
+    // 解析標題列（第一列）
+    const headers = jsonData[0] || [];
+    const dataRows = jsonData.slice(1).filter(row => row.some(cell => cell && cell.toString().trim() !== ''));
+    
+    console.log('標題列:', headers); // 除錯用
+    console.log('資料列數:', dataRows.length); // 除錯用
+
+    if (dataRows.length === 0) {
+      throw new Error('沒有找到任何選手資料');
+    }
     
     // 轉換資料
     AppState.swimmers = parseSwimmerData(headers, dataRows);
+    
+    console.log('解析後的選手數:', AppState.swimmers.length); // 除錯用
     
     updateSummary();
     showMessage(`✅ 成功匯入 ${AppState.swimmers.length} 位選手`, false);
     
     // 顯示欄位檢查結果
-    showFieldCheck(headers);
+    showFieldCheck(headers, dataRows.length);
     
   } catch (error) {
     showMessage(`❌ 錯誤：${error.message}`, true);
@@ -589,69 +602,102 @@ function readFileAsync(file) {
 function parseSwimmerData(headers, rows) {
   const swimmers = [];
   
-  // 找出各欄位的索引
-  const nameIdx = findColumnIndex(headers, ['姓名', 'Name', '名字']);
-  const unitIdx = findColumnIndex(headers, ['單位', 'Unit', '隊伍']);
-  const genderIdx = findColumnIndex(headers, ['性別', 'Gender', 'Sex']);
-  const birthYearIdx = findColumnIndex(headers, ['出生年份', 'BirthYear', '出生年']);
-  const event1Idx = findColumnIndex(headers, ['項目1', 'Event1', '項目']);
-  const time1Idx = findColumnIndex(headers, ['成績1', 'Time1', '報名成績1']);
-  const event2Idx = findColumnIndex(headers, ['項目2', 'Event2']);
-  const time2Idx = findColumnIndex(headers, ['成績2', 'Time2']);
-  const event3Idx = findColumnIndex(headers, ['項目3', 'Event3']);
-  const time3Idx = findColumnIndex(headers, ['成績3', 'Time3']);
+  // 找出各欄位的索引（支援中英文）
+  const nameIndices = findColumnIndices(headers, ['姓名', 'Name', '名字']);
+  const unitIndices = findColumnIndices(headers, ['單位', 'Unit', '隊伍', 'Team']);
+  const genderIndices = findColumnIndices(headers, ['性別', 'Gender', 'Sex']);
+  const birthYearIndices = findColumnIndices(headers, ['出生年份', 'BirthYear', '出生年', 'Year']);
+  
+  // 找出所有可能的項目和成績欄位
+  const eventIndices = [];
+  const timeIndices = [];
+  
+  for (let i = 0; i < headers.length; i++) {
+    const header = headers[i]?.toString().toLowerCase() || '';
+    if (header.includes('項目') || header.includes('event')) {
+      eventIndices.push(i);
+    }
+    if (header.includes('成績') || header.includes('time') || header.includes('seed')) {
+      timeIndices.push(i);
+    }
+  }
 
-  rows.forEach(row => {
-    if (!row[nameIdx] || !row[unitIdx]) return; // 跳過無效資料
+  // 如果沒找到特定欄位，嘗試用位置判斷（假設固定格式）
+  if (nameIndices.length === 0) nameIndices.push(0); // 假設第一欄是姓名
+  if (unitIndices.length === 0) unitIndices.push(1); // 假設第二欄是單位
+  if (genderIndices.length === 0) genderIndices.push(2); // 假設第三欄是性別
+  if (birthYearIndices.length === 0) birthYearIndices.push(3); // 假設第四欄是出生年份
+
+  rows.forEach((row, rowIndex) => {
+    // 取得基本資料
+    const name = getCellValue(row, nameIndices[0]);
+    const unit = getCellValue(row, unitIndices[0]);
+    const gender = getCellValue(row, genderIndices[0]);
+    const birthYear = getCellValue(row, birthYearIndices[0]);
     
-    const name = row[nameIdx]?.toString().trim() || '';
-    const unit = row[unitIdx]?.toString().trim() || '';
-    const gender = standardizeGender(row[genderIdx]);
-    const birthYear = extractYear(row[birthYearIdx]);
+    // 跳過沒有姓名或單位的資料
+    if (!name || !unit) return;
+    
     const age = calculateAge(birthYear);
     
-    // 處理最多3個項目
-    const events = [
-      { event: row[event1Idx]?.toString().trim(), time: row[time1Idx]?.toString().trim() },
-      { event: row[event2Idx]?.toString().trim(), time: row[time2Idx]?.toString().trim() },
-      { event: row[event3Idx]?.toString().trim(), time: row[time3Idx]?.toString().trim() }
-    ];
-    
-    events.forEach(e => {
-      if (e.event && e.event !== '') {
+    // 處理多個項目（最多到第10個項目，確保能抓到所有）
+    for (let i = 0; i < Math.min(eventIndices.length, 10); i++) {
+      const eventIdx = eventIndices[i];
+      const timeIdx = i < timeIndices.length ? timeIndices[i] : -1;
+      
+      const event = getCellValue(row, eventIdx);
+      const time = timeIdx >= 0 ? getCellValue(row, timeIdx) : '';
+      
+      if (event && event !== '') {
         swimmers.push({
           Name: name,
           Unit: unit,
-          Gender: gender,
-          BirthYear: birthYear,
+          Gender: standardizeGender(gender),
+          BirthYear: extractYear(birthYear),
           Age: age,
-          Event: e.event,
-          SeedTime: standardizeTime(e.time)
+          Event: event.trim(),
+          SeedTime: standardizeTime(time)
         });
       }
-    });
+    }
   });
   
   return swimmers;
 }
 
-function findColumnIndex(headers, possibleNames) {
+function findColumnIndices(headers, possibleNames) {
+  const indices = [];
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i]?.toString().toLowerCase() || '';
     for (const name of possibleNames) {
       if (header.includes(name.toLowerCase())) {
-        return i;
+        indices.push(i);
+        break;
       }
     }
   }
-  return -1;
+  return indices;
 }
 
-function showFieldCheck(headers) {
+function getCellValue(row, index) {
+  if (index === undefined || index < 0 || index >= row.length) return '';
+  const value = row[index];
+  return value !== undefined && value !== null ? value.toString().trim() : '';
+}
+
+function showFieldCheck(headers, rowCount) {
   const fieldCheck = document.getElementById('fieldCheck');
+  
+  // 計算各類欄位數量
+  const nameFields = headers.filter(h => h && (h.includes('姓名') || h.includes('Name'))).length;
+  const eventFields = headers.filter(h => h && (h.includes('項目') || h.includes('Event'))).length;
+  
   fieldCheck.innerHTML = `
     <h3>📋 Excel欄位檢查</h3>
     <p>偵測到 ${headers.length} 個欄位</p>
+    <p>資料列數：${rowCount} 列</p>
+    <p>姓名欄位：${nameFields > 0 ? '✅' : '❌'}</p>
+    <p>項目欄位：${eventFields > 0 ? '✅' : '❌'} (找到 ${eventFields} 個項目欄位)</p>
     <p>成功匯入 ${AppState.swimmers.length} 筆報名資料</p>
     <div class="ok">✅ 資料解析完成</div>
   `;
@@ -660,8 +706,8 @@ function showFieldCheck(headers) {
 function standardizeGender(gender) {
   if (!gender) return 'U';
   const g = gender.toString().toLowerCase().trim();
-  if (['男', 'male', 'm', 'man'].includes(g)) return '男';
-  if (['女', 'female', 'f', 'woman'].includes(g)) return '女';
+  if (['男', 'male', 'm', 'man', 'boy'].includes(g)) return '男';
+  if (['女', 'female', 'f', 'woman', 'girl'].includes(g)) return '女';
   return 'U';
 }
 
@@ -676,7 +722,9 @@ function extractYear(yearValue) {
 }
 
 function calculateAge(birthYear) {
-  return new Date().getFullYear() - parseInt(birthYear);
+  const year = parseInt(birthYear);
+  if (isNaN(year)) return 0;
+  return new Date().getFullYear() - year;
 }
 
 function standardizeTime(timeValue) {
@@ -940,6 +988,8 @@ function generateHeats() {
     const groups = groupEvents();
     let html = '';
     let totalHeats = 0;
+
+    console.log('分組後的群組:', groups); // 除錯用
 
     // 依照設定的順序顯示項目
     const orderedEvents = AppState.eventOrder.length > 0 ? 
