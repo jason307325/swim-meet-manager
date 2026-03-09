@@ -1,238 +1,200 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-
 <head>
-
 <meta charset="UTF-8">
-
-<title>游泳比賽管理系統</title>
-
+<title>International Swim Meet Manager Ultimate</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
-
-body{
-font-family:Arial;
-background:#f2f5f8;
-padding:20px;
-}
-
-h1{
-text-align:center;
-}
-
-.panel{
-background:white;
-padding:15px;
-border-radius:10px;
-margin-bottom:20px;
-}
-
-table{
-border-collapse:collapse;
-width:100%;
-margin-bottom:40px;
-}
-
-th,td{
-border:1px solid #999;
-padding:6px;
-text-align:center;
-}
-
-button{
-padding:10px 20px;
-font-size:16px;
-cursor:pointer;
-}
-
+body{font-family:Arial; background:#eef2f7; padding:20px;}
+h1{text-align:center;}
+.panel{background:white; padding:15px; border-radius:10px; margin-bottom:20px;}
+table{border-collapse:collapse; width:100%; margin-bottom:40px;}
+th,td{border:1px solid #888; padding:6px; text-align:center;}
+button{padding:10px 20px; margin-right:10px; font-size:15px; cursor:pointer;}
 </style>
-
 </head>
 
 <body>
 
-<h1>游泳比賽管理系統</h1>
+<h1>International Swim Meet Manager Ultimate</h1>
 
 <div class="panel">
-
 <h3>上傳報名 Excel</h3>
-
 <input type="file" id="excelFiles" multiple>
-
 </div>
 
 <div class="panel">
-
 <h3>水道數</h3>
-
 <select id="lanes">
 <option value="6">6</option>
 <option value="8" selected>8</option>
 <option value="10">10</option>
 </select>
-
 <button onclick="generate()">生成秩序冊</button>
-
-<button onclick="window.print()">列印PDF</button>
-
+<button onclick="calcTimeline()">計算整場賽程時間</button>
+<button onclick="window.print()">輸出PDF</button>
 </div>
 
+<div id="summary"></div>
+<div id="timeline"></div>
 <div id="output"></div>
 
 <script>
 
 let swimmers=[]
 
+const MIN_TIME={
+"50":45,"100":90,"200":180,"400":420,"800":900,"1500":1700
+}
+
+// 中文欄位對應
+const fieldMap = {
+  "姓名": "Name",
+  "單位": "Unit",
+  "報名成績": "SeedTime",
+  "性別": "Gender",
+  "年齡組": "AgeGroup",
+  "出生年份": "BirthYear",
+  "項目": "Event"
+};
+
 document.getElementById("excelFiles").addEventListener("change",function(e){
+  const files=e.target.files
+  for(let file of files){
+    const reader=new FileReader()
+    reader.onload=function(evt){
+      const data=new Uint8Array(evt.target.result)
+      const workbook=XLSX.read(data,{type:'array'})
+      const sheet=workbook.Sheets[workbook.SheetNames[0]]
+      let json=XLSX.utils.sheet_to_json(sheet)
 
-const files=e.target.files
+      json.forEach(r=>{
+        let newR={}
+        for(let k in fieldMap){
+          newR[fieldMap[k]] = r[k] || ""
+        }
 
-for(let file of files){
+        if(!newR.SeedTime || newR.SeedTime==""){
+          newR.SeedTime="99:99.99"
+        }
 
-const reader=new FileReader()
+        if(!newR.AgeGroup && newR.BirthYear){
+          let age=new Date().getFullYear()-newR.BirthYear
+          if(age<=10) newR.AgeGroup="U10"
+          else if(age<=12) newR.AgeGroup="U12"
+          else if(age<=15) newR.AgeGroup="U15"
+          else newR.AgeGroup="OPEN"
+        }
 
-reader.onload=function(evt){
-
-const data=new Uint8Array(evt.target.result)
-
-const workbook=XLSX.read(data,{type:'array'})
-
-const sheet=workbook.Sheets[workbook.SheetNames[0]]
-
-const json=XLSX.utils.sheet_to_json(sheet)
-
-swimmers=swimmers.concat(json)
-
-}
-
-reader.readAsArrayBuffer(file)
-
-}
-
+        swimmers.push(newR)
+      })
+    }
+    reader.readAsArrayBuffer(file)
+  }
 })
+
+function timeToSeconds(t){
+  if(t=="99:99.99") return 9999
+  let p=t.split(":")
+  let s=p[1].split(".")
+  return parseInt(p[0])*60 + parseInt(s[0]) + parseInt(s[1])/100
+}
 
 function laneOrder(lanes){
-
-if(lanes==6) return [3,4,2,5,1,6]
-
-if(lanes==8) return [4,5,3,6,2,7,1,8]
-
-if(lanes==10) return [4,5,3,6,2,7,1,8,0,9]
-
+  if(lanes==6) return [3,4,2,5,1,6]
+  if(lanes==8) return [4,5,3,6,2,7,1,8]
+  if(lanes==10) return [5,6,4,7,3,8,2,9,1,10]
 }
 
-function group(swimmers){
-
-let g={}
-
-swimmers.forEach(s=>{
-
-let key=s.AgeGroup+" "+s.Gender+" "+s.Event
-
-if(!g[key]) g[key]=[]
-
-g[key].push(s)
-
-})
-
-return g
-
+function group(){
+  let g={}
+  swimmers.forEach(s=>{
+    let key=s.AgeGroup+" "+s.Gender+" "+s.Event
+    if(!g[key]) g[key]=[]
+    g[key].push(s)
+  })
+  return g
 }
 
 function serpentine(list,lanes){
-
-list.sort((a,b)=>a.SeedTime-b.SeedTime)
-
-let heats=Math.ceil(list.length/lanes)
-
-let grid=Array.from({length:heats},()=>[])
-
-let index=0
-
-for(let col=0;col<lanes;col++){
-
-if(col%2==0){
-
-for(let r=heats-1;r>=0;r--){
-
-if(index<list.length)
-grid[r].push(list[index++])
-
-}
-
-}else{
-
-for(let r=0;r<heats;r++){
-
-if(index<list.length)
-grid[r].push(list[index++])
-
-}
-
-}
-
-}
-
-return grid
-
+  list.sort((a,b)=>timeToSeconds(a.SeedTime)-timeToSeconds(b.SeedTime))
+  let heats=Math.ceil(list.length/lanes)
+  let grid=Array.from({length:heats},()=>[])
+  let index=0
+  for(let col=0;col<lanes;col++){
+    if(col%2==0){
+      for(let r=heats-1;r>=0;r--){
+        if(index<list.length) grid[r].push(list[index++])
+      }
+    }else{
+      for(let r=0;r<heats;r++){
+        if(index<list.length) grid[r].push(list[index++])
+      }
+    }
+  }
+  return grid
 }
 
 function generate(){
+  let lanes=parseInt(document.getElementById("lanes").value)
+  let groups=group()
+  let output=document.getElementById("output")
+  let summary=document.getElementById("summary")
+  output.innerHTML=""
+  let totalHeats=0
 
-let lanes=parseInt(document.getElementById("lanes").value)
+  for(let k in groups){
+    let heats=serpentine(groups[k],lanes)
+    totalHeats+=heats.length
+    output.innerHTML+=`<h2>${k}</h2>`
+    heats.forEach((heat,i)=>{
+      let order=laneOrder(lanes)
+      let html=`<h3>第${i+1}組</h3>`
+      html+=`<table>
+      <tr><th>水道</th><th>單位</th><th>姓名</th><th>報名成績</th><th>比賽成績</th></tr>`
+      heat.forEach((s,idx)=>{
+        html+=`<tr>
+        <td>${order[idx]}</td>
+        <td>${s.Unit}</td>
+        <td>${s.Name}</td>
+        <td>${s.SeedTime}</td>
+        <td></td>
+        </tr>`
+      })
+      html+="</table>"
+      output.innerHTML+=html
+    })
+  }
 
-let groups=group(swimmers)
-
-let output=document.getElementById("output")
-
-output.innerHTML=""
-
-for(let k in groups){
-
-let heats=serpentine(groups[k],lanes)
-
-output.innerHTML+=`<h2>${k}</h2>`
-
-heats.reverse()
-
-heats.forEach((heat,i)=>{
-
-let order=laneOrder(lanes)
-
-let html=`<h3>第${i+1}組</h3>`
-
-html+=`<table>
-<tr>
-<th>水道</th>
-<th>單位</th>
-<th>姓名</th>
-<th>成績</th>
-</tr>`
-
-heat.forEach((s,idx)=>{
-
-html+=`<tr>
-<td>${order[idx]}</td>
-<td>${s.Unit}</td>
-<td>${s.Name}</td>
-<td>${s.SeedTime}</td>
-</tr>`
-
-})
-
-html+="</table>"
-
-output.innerHTML+=html
-
-})
-
+  summary.innerHTML=`<h2>選手總數：${swimmers.length}　總組數：${totalHeats}</h2>`
 }
 
+function calcTimeline(){
+  let groups=group()
+  let total=0
+  let report=""
+  for(let key in groups){
+    let athletes=groups[key]
+    let times=athletes.map(s=>timeToSeconds(s.SeedTime))
+    let valid=times.filter(t=>t<9000)
+    let base
+    if(valid.length==0){
+      let first=athletes[0]
+      let distMatch=first.Event? first.Event.match(/\d+/) : null
+      let dist=distMatch? distMatch[0] : null
+      base=MIN_TIME[dist] || 60
+    }else{
+      base=Math.max(...valid)
+    }
+    let eventTime=base+30
+    total+=eventTime
+    report+=`<p>${key} 約 ${Math.round(eventTime)} 秒</p>`
+  }
+  document.getElementById("timeline").innerHTML=
+  `<h2>預估整場賽事時間：${Math.round(total/60)} 分鐘</h2>`+report
 }
 
 </script>
-
 </body>
-
 </html>
