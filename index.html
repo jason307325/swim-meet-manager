@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>Swim Meet Manager Web - 優化版 (中英雙語)</title>
+<title>Swim Meet Manager Web - 優化版 (中英雙語 + 年齡分組)</title>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
@@ -176,8 +176,39 @@ select {
   background: #3498db;
 }
 
+.age-group-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 15px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.age-group-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.age-group-option label {
+  font-weight: 600;
+  min-width: 100px;
+}
+
+.age-group-option select {
+  width: 150px;
+}
+
+.kindergarten-note {
+  font-size: 12px;
+  color: #7f8c8d;
+  margin-left: 10px;
+}
+
 @media print {
-  button, .panel, #fieldCheck, #timeline, .language-switch {
+  button, .panel, #fieldCheck, #timeline, .language-switch, .age-group-settings {
     display: none;
   }
 }
@@ -188,7 +219,7 @@ select {
 
 <div id="loading">處理中，請稍候...</div>
 
-<h1>🏊 Swim Meet Manager Web - 國際版</h1>
+<h1>🏊 Swim Meet Manager Web - 國際版 (年齡分組)</h1>
 
 <div class="panel">
   <div class="language-switch">
@@ -204,7 +235,38 @@ select {
 
 <div class="panel">
   <h3 id="settingTitle">⚙️ 比賽設定 / Meet Settings</h3>
-  <div style="display: flex; align-items: center; flex-wrap: wrap;">
+  
+  <!-- 年齡分組設定 -->
+  <div class="age-group-settings">
+    <div class="age-group-option">
+      <label id="ageGroupLabel">📊 年齡分組方式 / Age Grouping:</label>
+      <select id="ageGroupType" onchange="updateAgeGroupSettings()">
+        <option value="standard" selected>標準分組 (U10, U12, U15, OPEN)</option>
+        <option value="1year">一歲一階級 (6,7,8,9,10,11,12,13,14,15,16+)</option>
+        <option value="2year">兩歲一階級 (6-7,8-9,10-11,12-13,14-15,16-17,18+)</option>
+        <option value="5year">五歲一階級 (6-10,11-15,16-20,21+)</option>
+        <option value="kindergarten">幼兒園組 (3-6歲混齡)</option>
+        <option value="custom">自定義區間</option>
+      </select>
+    </div>
+    
+    <div class="age-group-option" id="customAgeRange" style="display: none;">
+      <label>自定義區間 (例如: 6-8,9-11,12-14):</label>
+      <input type="text" id="customRanges" placeholder="6-8,9-11,12-14" style="width: 200px; padding: 5px;">
+    </div>
+    
+    <div class="age-group-option">
+      <label id="minAgeLabel">📅 最小參賽年齡 / Min Age:</label>
+      <input type="number" id="minAge" value="3" min="0" max="100" style="width: 60px; padding: 5px;">
+    </div>
+    
+    <div class="age-group-option">
+      <label id="maxAgeLabel">📅 最大參賽年齡 / Max Age:</label>
+      <input type="number" id="maxAge" value="18" min="0" max="120" style="width: 60px; padding: 5px;">
+    </div>
+  </div>
+  
+  <div style="display: flex; align-items: center; flex-wrap: wrap; margin-top: 15px;">
     <span id="lanesLabel">水道數 / Lanes</span>
     <select id="lanes">
       <option value="6">6 水道 / Lanes</option>
@@ -270,7 +332,11 @@ const I18N = {
     importSuccess: '✅ 成功匯入',
     athletes: '位選手',
     error: '錯誤',
-    warning: '警告'
+    warning: '警告',
+    ageGroupLabel: '📊 年齡分組方式',
+    minAgeLabel: '📅 最小參賽年齡',
+    maxAgeLabel: '📅 最大參賽年齡',
+    kindergarten: '幼兒園組'
   },
   en: {
     uploadTitle: '📁 Upload Entry Excel',
@@ -307,14 +373,17 @@ const I18N = {
     importSuccess: '✅ Successfully imported',
     athletes: 'athletes',
     error: 'Error',
-    warning: 'Warning'
+    warning: 'Warning',
+    ageGroupLabel: '📊 Age Grouping',
+    minAgeLabel: '📅 Min Age',
+    maxAgeLabel: '📅 Max Age',
+    kindergarten: 'Kindergarten'
   }
 };
 
 // ==================== 欄位映射（支援中英文）====================
 const FIELD_MAPPINGS = [
   {
-    // 中文欄位
     chinese: {
       name: ['姓名', '名字', '選手姓名', '運動員'],
       unit: ['單位', '隊伍', '學校', '俱樂部', '隊名'],
@@ -325,7 +394,6 @@ const FIELD_MAPPINGS = [
     }
   },
   {
-    // 英文欄位
     english: {
       name: ['Name', 'Athlete', 'Swimmer', 'Full Name'],
       unit: ['Unit', 'Team', 'Club', 'School', 'Country'],
@@ -337,7 +405,6 @@ const FIELD_MAPPINGS = [
   }
 ];
 
-// ==================== 標準化欄位 ====================
 const STANDARD_FIELDS = {
   name: 'Name',
   unit: 'Unit',
@@ -347,13 +414,11 @@ const STANDARD_FIELDS = {
   seedTime: 'SeedTime'
 };
 
-// ==================== 必要欄位（中英文對照）====================
 const REQUIRED_FIELDS = {
   zh: ['姓名', '單位', '性別', '出生年份', '項目', '報名成績'],
   en: ['Name', 'Unit', 'Gender', 'BirthYear', 'Event', 'SeedTime']
 };
 
-// ==================== 最小時間常數 ====================
 const MIN_TIME = {
   "50": 45,
   "100": 90,
@@ -363,7 +428,6 @@ const MIN_TIME = {
   "1500": 1700
 };
 
-// ==================== 水道順序 ====================
 const LANE_ORDERS = {
   6: [3, 4, 2, 5, 1, 6],
   8: [4, 5, 3, 6, 2, 7, 1, 8],
@@ -374,13 +438,11 @@ const LANE_ORDERS = {
 function setLanguage(lang) {
   AppState.currentLanguage = lang;
   
-  // 更新按鈕樣式
   document.querySelectorAll('.language-btn').forEach(btn => {
     btn.classList.remove('active');
   });
   event.target.classList.add('active');
   
-  // 更新UI文字
   updateUILanguage();
 }
 
@@ -394,8 +456,10 @@ function updateUILanguage() {
   document.getElementById('generateBtn').textContent = t.generateBtn;
   document.getElementById('timelineBtn').textContent = t.timelineBtn;
   document.getElementById('exportBtn').textContent = t.exportBtn;
+  document.getElementById('ageGroupLabel').textContent = t.ageGroupLabel;
+  document.getElementById('minAgeLabel').textContent = t.minAgeLabel;
+  document.getElementById('maxAgeLabel').textContent = t.maxAgeLabel;
   
-  // 重新整理顯示（如果有資料）
   if (AppState.swimmers.length > 0) {
     updateSummary();
     if (AppState.lastGenerated) {
@@ -406,6 +470,69 @@ function updateUILanguage() {
 
 function t(key) {
   return I18N[AppState.currentLanguage][key] || key;
+}
+
+// ==================== 年齡分組設定 ====================
+function updateAgeGroupSettings() {
+  const ageGroupType = document.getElementById('ageGroupType').value;
+  const customRangeDiv = document.getElementById('customAgeRange');
+  
+  customRangeDiv.style.display = ageGroupType === 'custom' ? 'flex' : 'none';
+}
+
+function getAgeGroup(age) {
+  const ageGroupType = document.getElementById('ageGroupType').value;
+  const minAge = parseInt(document.getElementById('minAge').value) || 0;
+  const maxAge = parseInt(document.getElementById('maxAge').value) || 120;
+  
+  // 過濾年齡範圍
+  if (age < minAge || age > maxAge) return null;
+  
+  switch(ageGroupType) {
+    case 'standard':
+      if (age <= 10) return 'U10';
+      if (age <= 12) return 'U12';
+      if (age <= 15) return 'U15';
+      return 'OPEN';
+      
+    case '1year':
+      if (age >= 16) return '16+';
+      return age + '歲';
+      
+    case '2year':
+      if (age <= 5) return '5歲以下';
+      if (age >= 18) return '18+';
+      const start = Math.floor(age / 2) * 2;
+      return `${start}-${start+1}歲`;
+      
+    case '5year':
+      if (age <= 5) return '5歲以下';
+      if (age >= 21) return '21+';
+      const start5 = Math.floor(age / 5) * 5;
+      return `${start5}-${start5+4}歲`;
+      
+    case 'kindergarten':
+      // 幼兒園組：3-6歲混齡
+      if (age >= 3 && age <= 6) return '幼兒園組';
+      if (age < 3) return '3歲以下';
+      return '小學以上';
+      
+    case 'custom':
+      const customRanges = document.getElementById('customRanges').value;
+      if (customRanges) {
+        const ranges = customRanges.split(',').map(r => r.trim());
+        for (const range of ranges) {
+          const [low, high] = range.split('-').map(n => parseInt(n));
+          if (age >= low && age <= high) {
+            return `${low}-${high}歲`;
+          }
+        }
+      }
+      return '其他';
+      
+    default:
+      return 'OPEN';
+  }
 }
 
 // ==================== UI 控制 ====================
@@ -443,22 +570,18 @@ async function handleFileUpload(e) {
       throw new Error(t('error') + ': Excel 檔案為空 / Excel file is empty');
     }
 
-    // 欄位匹配和檢查
     const headers = Object.keys(jsonData[0]);
     const { matchedFields, missingFields, matchRate } = matchFields(headers);
     
-    // 顯示欄位檢查結果
     const fieldCheck = generateFieldCheckHTML(headers, matchedFields, missingFields, matchRate);
     document.getElementById("fieldCheck").innerHTML = fieldCheck;
 
     if (missingFields.length > 0 && matchRate < 0.5) {
-      // 匹配率太低，停止匯入
       showMessage(t('fieldsPartial'), true);
       showLoading(false);
       return;
     }
 
-    // 轉換資料
     AppState.swimmers = jsonData.map(row => convertRowToSwimmer(row, matchedFields));
     AppState.originalData = jsonData;
     
@@ -482,38 +605,32 @@ function readFileAsync(file) {
   });
 }
 
-// ==================== 欄位匹配（中英文自動識別）====================
+// ==================== 欄位匹配 ====================
 function matchFields(headers) {
   const matchedFields = {};
   const missingFields = [];
   
-  // 建立所有可能的欄位名稱映射
   const possibleNames = {};
   
-  // 中文欄位
   Object.entries(FIELD_MAPPINGS[0].chinese).forEach(([stdField, variations]) => {
     possibleNames[stdField] = possibleNames[stdField] || [];
     variations.forEach(v => possibleNames[stdField].push(v));
   });
   
-  // 英文欄位
   Object.entries(FIELD_MAPPINGS[1].english).forEach(([stdField, variations]) => {
     possibleNames[stdField] = possibleNames[stdField] || [];
     variations.forEach(v => possibleNames[stdField].push(v));
   });
 
-  // 匹配欄位
   let matchedCount = 0;
   const requiredStdFields = ['name', 'unit', 'gender', 'birthYear', 'event', 'seedTime'];
   
   requiredStdFields.forEach(stdField => {
     let matched = false;
     
-    // 嘗試匹配每個標頭
     for (const header of headers) {
       const headerStr = String(header).trim();
       
-      // 檢查是否在可能的名稱列表中
       if (possibleNames[stdField] && 
           possibleNames[stdField].some(name => 
             headerStr.toLowerCase() === name.toLowerCase() ||
@@ -579,7 +696,6 @@ function generateFieldCheckHTML(headers, matchedFields, missingFields, matchRate
 function convertRowToSwimmer(row, matchedFields) {
   const swimmer = {};
   
-  // 使用匹配到的欄位名稱提取資料
   Object.entries(matchedFields).forEach(([stdField, originalField]) => {
     const value = row[originalField]?.toString().trim() || '';
     
@@ -591,7 +707,6 @@ function convertRowToSwimmer(row, matchedFields) {
         swimmer.Unit = value;
         break;
       case 'gender':
-        // 標準化性別
         swimmer.Gender = standardizeGender(value);
         break;
       case 'birthYear':
@@ -606,7 +721,6 @@ function convertRowToSwimmer(row, matchedFields) {
     }
   });
 
-  // 確保所有必要欄位都有值
   swimmer.Name = swimmer.Name || 'Unknown';
   swimmer.Unit = swimmer.Unit || 'Unknown';
   swimmer.Gender = swimmer.Gender || 'U';
@@ -614,8 +728,12 @@ function convertRowToSwimmer(row, matchedFields) {
   swimmer.Event = swimmer.Event || 'Unknown';
   swimmer.SeedTime = swimmer.SeedTime || '99:99.99';
   
-  // 計算年齡組別
-  swimmer.AgeGroup = calculateAgeGroup(swimmer.BirthYear);
+  // 計算年齡
+  const currentYear = new Date().getFullYear();
+  swimmer.Age = currentYear - parseInt(swimmer.BirthYear);
+  
+  // 根據選擇的年齡分組方式決定組別
+  swimmer.AgeGroup = getAgeGroup(swimmer.Age) || 'OPEN';
 
   return swimmer;
 }
@@ -632,7 +750,7 @@ function standardizeGender(gender) {
     return '女';
   }
   
-  return 'U'; // Unknown
+  return 'U';
 }
 
 function extractYear(yearValue) {
@@ -640,19 +758,16 @@ function extractYear(yearValue) {
   
   const yearStr = yearValue.toString().trim();
   
-  // 嘗試提取4位數年份
   const match = yearStr.match(/\b(19|20)\d{2}\b/);
   if (match) {
     return parseInt(match[0]);
   }
   
-  // 如果是日期格式，嘗試解析
   const date = new Date(yearStr);
   if (!isNaN(date.getTime())) {
     return date.getFullYear();
   }
   
-  // 預設返回
   return new Date().getFullYear() - 15;
 }
 
@@ -661,12 +776,10 @@ function standardizeTime(timeValue) {
   
   const timeStr = timeValue.toString().trim();
   
-  // 檢查是否已經是 mm:ss.ff 格式
   if (timeStr.match(/^\d{1,2}:\d{2}\.\d{2}$/)) {
     return timeStr;
   }
   
-  // 嘗試轉換純秒數
   const secondsMatch = timeStr.match(/^(\d+(?:\.\d+)?)$/);
   if (secondsMatch) {
     const totalSeconds = parseFloat(secondsMatch[1]);
@@ -675,27 +788,12 @@ function standardizeTime(timeValue) {
     return `${minutes.toString().padStart(2, '0')}:${seconds.padStart(5, '0')}`;
   }
   
-  // 嘗試轉換其他格式
   const parts = timeStr.split(/[:\.]/);
   if (parts.length === 3) {
     return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}.${parts[2].padStart(2, '0')}`;
   }
   
   return '99:99.99';
-}
-
-function calculateAgeGroup(birthYear) {
-  if (!birthYear) return 'OPEN';
-  
-  const year = parseInt(birthYear);
-  if (isNaN(year)) return 'OPEN';
-  
-  const age = new Date().getFullYear() - year;
-  
-  if (age <= 10) return 'U10';
-  if (age <= 12) return 'U12';
-  if (age <= 15) return 'U15';
-  return 'OPEN';
 }
 
 // ==================== 時間處理 ====================
@@ -729,14 +827,17 @@ function groupEvents() {
     groups[key].push(swimmer);
   });
 
-  // 依照年齡排序
+  // 自定義排序，讓幼兒園組優先顯示
   return Object.fromEntries(
-    Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
+    Object.entries(groups).sort(([a], [b]) => {
+      if (a.includes('幼兒園')) return -1;
+      if (b.includes('幼兒園')) return 1;
+      return a.localeCompare(b);
+    })
   );
 }
 
 function serpentineSort(athletes, lanes) {
-  // 依成績排序
   const sorted = [...athletes].sort((a, b) => 
     timeToSeconds(a.SeedTime) - timeToSeconds(b.SeedTime)
   );
@@ -747,14 +848,12 @@ function serpentineSort(athletes, lanes) {
   let index = 0;
   for (let col = 0; col < lanes; col++) {
     if (col % 2 === 0) {
-      // 偶數欄：從下到上
       for (let row = heatsCount - 1; row >= 0; row--) {
         if (index < sorted.length) {
           grid[row][col] = sorted[index++];
         }
       }
     } else {
-      // 奇數欄：從上到下
       for (let row = 0; row < heatsCount; row++) {
         if (index < sorted.length) {
           grid[row][col] = sorted[index++];
@@ -799,6 +898,7 @@ function generateHeats() {
                   <th>${t('lane')}</th>
                   <th>${t('name')}</th>
                   <th>${t('unit')}</th>
+                  <th>年齡/Age</th>
                   <th>${t('seedTime')}</th>
                   <th>${t('resultTime')}</th>
                   <th>${t('rank')}</th>
@@ -817,6 +917,7 @@ function generateHeats() {
                 <td><strong>${lane}</strong></td>
                 <td>${athlete.Name || '--'}</td>
                 <td>${athlete.Unit || '--'}</td>
+                <td>${athlete.Age || '--'}</td>
                 <td>${athlete.SeedTime || '--:--.--'}</td>
                 <td><input class="score" placeholder="--:--.--" onchange="updateScore(this)"></td>
                 <td><input type="number" min="1" style="width: 50px;" placeholder="${t('rank')}"></td>
@@ -860,14 +961,13 @@ function calcTimeline() {
     
     let baseTime;
     if (validTimes.length === 0) {
-      // 從項目名稱提取距離
       const distance = eventName.match(/\d+/)?.[0] || '100';
       baseTime = MIN_TIME[distance] || 60;
     } else {
       baseTime = Math.max(...validTimes);
     }
 
-    const eventTime = baseTime + 30; // 每組加30秒緩衝
+    const eventTime = baseTime + 30;
     totalSeconds += eventTime;
     
     const minutes = Math.floor(eventTime / 60);
@@ -894,7 +994,6 @@ function exportToExcel() {
   }
 
   try {
-    // 收集所有成績
     const results = [];
     const tables = document.querySelectorAll('#output table');
     
@@ -902,20 +1001,20 @@ function exportToExcel() {
       const rows = table.querySelectorAll('tbody tr');
       rows.forEach(row => {
         const cells = row.querySelectorAll('td');
-        if (cells.length >= 6) {
+        if (cells.length >= 7) {
           results.push({
             [t('lane')]: cells[0].textContent,
             [t('name')]: cells[1].textContent,
             [t('unit')]: cells[2].textContent,
-            [t('seedTime')]: cells[3].textContent,
-            [t('resultTime')]: cells[4].querySelector('input')?.value || '',
-            [t('rank')]: cells[5].querySelector('input')?.value || ''
+            '年齡/Age': cells[3].textContent,
+            [t('seedTime')]: cells[4].textContent,
+            [t('resultTime')]: cells[5].querySelector('input')?.value || '',
+            [t('rank')]: cells[6].querySelector('input')?.value || ''
           });
         }
       });
     });
 
-    // 建立 Excel
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(results);
     XLSX.utils.book_append_sheet(wb, ws, 'Results');
@@ -974,6 +1073,7 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('Swim Meet Manager initialized');
   updateUILanguage();
   updateSummary();
+  updateAgeGroupSettings();
 });
 </script>
 
