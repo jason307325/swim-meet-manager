@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>游泳比賽管理系統</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+
+body{
+font-family:Arial;
+background:#f2f5f8;
+padding:20px;
+}
+
+h1{
+text-align:center;
+}
+
+.panel{
+background:white;
+padding:15px;
+border-radius:10px;
+margin-bottom:20px;
+}
+
+table{
+border-collapse:collapse;
+width:100%;
+margin-bottom:40px;
+}
+
+th,td{
+border:1px solid #999;
+padding:6px;
+text-align:center;
+}
+
+button{
+padding:10px 20px;
+font-size:16px;
+cursor:pointer;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>游泳比賽管理系統</h1>
+
+<div class="panel">
+
+<h3>上傳報名 Excel</h3>
+
+<input type="file" id="excelFiles" multiple>
+
+</div>
+
+<div class="panel">
+
+<h3>水道數</h3>
+
+<select id="lanes">
+<option value="6">6</option>
+<option value="8" selected>8</option>
+<option value="10">10</option>
+</select>
+
+<button onclick="generate()">生成秩序冊</button>
+
+<button onclick="window.print()">列印PDF</button>
+
+</div>
+
+<div id="output"></div>
+
+<script>
+
+let swimmers=[]
+
+document.getElementById("excelFiles").addEventListener("change",function(e){
+
+const files=e.target.files
+
+for(let file of files){
+
+const reader=new FileReader()
+
+reader.onload=function(evt){
+
+const data=new Uint8Array(evt.target.result)
+
+const workbook=XLSX.read(data,{type:'array'})
+
+const sheet=workbook.Sheets[workbook.SheetNames[0]]
+
+const json=XLSX.utils.sheet_to_json(sheet)
+
+swimmers=swimmers.concat(json)
+
+}
+
+reader.readAsArrayBuffer(file)
+
+}
+
+})
+
+function laneOrder(lanes){
+
+if(lanes==6) return [3,4,2,5,1,6]
+
+if(lanes==8) return [4,5,3,6,2,7,1,8]
+
+if(lanes==10) return [4,5,3,6,2,7,1,8,0,9]
+
+}
+
+function group(swimmers){
+
+let g={}
+
+swimmers.forEach(s=>{
+
+let key=s.AgeGroup+" "+s.Gender+" "+s.Event
+
+if(!g[key]) g[key]=[]
+
+g[key].push(s)
+
+})
+
+return g
+
+}
+
+function serpentine(list,lanes){
+
+list.sort((a,b)=>a.SeedTime-b.SeedTime)
+
+let heats=Math.ceil(list.length/lanes)
+
+let grid=Array.from({length:heats},()=>[])
+
+let index=0
+
+for(let col=0;col<lanes;col++){
+
+if(col%2==0){
+
+for(let r=heats-1;r>=0;r--){
+
+if(index<list.length)
+grid[r].push(list[index++])
+
+}
+
+}else{
+
+for(let r=0;r<heats;r++){
+
+if(index<list.length)
+grid[r].push(list[index++])
+
+}
+
+}
+
+}
+
+return grid
+
+}
+
+function generate(){
+
+let lanes=parseInt(document.getElementById("lanes").value)
+
+let groups=group(swimmers)
+
+let output=document.getElementById("output")
+
+output.innerHTML=""
+
+for(let k in groups){
+
+let heats=serpentine(groups[k],lanes)
+
+output.innerHTML+=`<h2>${k}</h2>`
+
+heats.reverse()
+
+heats.forEach((heat,i)=>{
+
+let order=laneOrder(lanes)
+
+let html=`<h3>第${i+1}組</h3>`
+
+html+=`<table>
+<tr>
+<th>水道</th>
+<th>單位</th>
+<th>姓名</th>
+<th>成績</th>
+</tr>`
+
+heat.forEach((s,idx)=>{
+
+html+=`<tr>
+<td>${order[idx]}</td>
+<td>${s.Unit}</td>
+<td>${s.Name}</td>
+<td>${s.SeedTime}</td>
+</tr>`
+
+})
+
+html+="</table>"
+
+output.innerHTML+=html
+
+})
+
+}
+
+}
+
+</script>
+
+</body>
+
+</html>
