@@ -2,199 +2,980 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>International Swim Meet Manager Ultimate</title>
+<title>Swim Meet Manager Web - 優化版 (中英雙語)</title>
+
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
-body{font-family:Arial; background:#eef2f7; padding:20px;}
-h1{text-align:center;}
-.panel{background:white; padding:15px; border-radius:10px; margin-bottom:20px;}
-table{border-collapse:collapse; width:100%; margin-bottom:40px;}
-th,td{border:1px solid #888; padding:6px; text-align:center;}
-button{padding:10px 20px; margin-right:10px; font-size:15px; cursor:pointer;}
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #eef2f7;
+  padding: 20px;
+  margin: 0;
+}
+
+h1 {
+  text-align: center;
+  color: #2c3e50;
+  margin-bottom: 30px;
+}
+
+.panel {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+button {
+  padding: 10px 20px;
+  margin: 5px;
+  cursor: pointer;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+button:hover {
+  background: #2980b9;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+button:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 15px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: center;
+}
+
+th {
+  background: #3498db;
+  color: white;
+  font-weight: 600;
+}
+
+tr:nth-child(even) {
+  background: #f8f9fa;
+}
+
+tr:hover {
+  background: #f1f3f5;
+}
+
+input.score {
+  width: 90px;
+  padding: 5px;
+  text-align: center;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+}
+
+input.score:focus {
+  outline: 2px solid #3498db;
+  border-color: transparent;
+}
+
+.ok {
+  color: #27ae60;
+  font-weight: bold;
+  padding: 10px;
+  background: #e8f5e9;
+  border-radius: 5px;
+}
+
+.error {
+  color: #c0392b;
+  font-weight: bold;
+  padding: 10px;
+  background: #fdeaea;
+  border-radius: 5px;
+}
+
+.warning {
+  color: #f39c12;
+  font-weight: bold;
+  padding: 10px;
+  background: #fef5e7;
+  border-radius: 5px;
+}
+
+select {
+  padding: 8px 15px;
+  margin: 0 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+#fieldCheck {
+  transition: all 0.3s;
+}
+
+#loading {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 20px;
+  border-radius: 10px;
+  z-index: 1000;
+}
+
+.summary-stats {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  font-size: 16px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  background: #3498db;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 5px;
+}
+
+.language-switch {
+  float: right;
+  margin-top: -10px;
+}
+
+.language-btn {
+  background: #95a5a6;
+  padding: 5px 15px;
+  font-size: 12px;
+}
+
+.language-btn.active {
+  background: #3498db;
+}
+
+@media print {
+  button, .panel, #fieldCheck, #timeline, .language-switch {
+    display: none;
+  }
+}
 </style>
 </head>
 
 <body>
 
-<h1>International Swim Meet Manager Ultimate</h1>
+<div id="loading">處理中，請稍候...</div>
+
+<h1>🏊 Swim Meet Manager Web - 國際版</h1>
 
 <div class="panel">
-<h3>上傳報名 Excel</h3>
-<input type="file" id="excelFiles" multiple>
+  <div class="language-switch">
+    <button class="language-btn active" onclick="setLanguage('zh')">中文</button>
+    <button class="language-btn" onclick="setLanguage('en')">English</button>
+  </div>
+  <h3 id="uploadTitle">📁 上傳報名 Excel / Upload Entry Excel</h3>
+  <input type="file" id="excelFile" accept=".xlsx,.xls,.csv">
+  <small style="color: #7f8c8d; margin-left: 10px;" id="fileHint">支援 .xlsx, .xls, .csv 格式</small>
 </div>
+
+<div id="fieldCheck" class="panel"></div>
 
 <div class="panel">
-<h3>水道數</h3>
-<select id="lanes">
-<option value="6">6</option>
-<option value="8" selected>8</option>
-<option value="10">10</option>
-</select>
-<button onclick="generate()">生成秩序冊</button>
-<button onclick="calcTimeline()">計算整場賽程時間</button>
-<button onclick="window.print()">輸出PDF</button>
+  <h3 id="settingTitle">⚙️ 比賽設定 / Meet Settings</h3>
+  <div style="display: flex; align-items: center; flex-wrap: wrap;">
+    <span id="lanesLabel">水道數 / Lanes</span>
+    <select id="lanes">
+      <option value="6">6 水道 / Lanes</option>
+      <option value="8" selected>8 水道 / Lanes</option>
+      <option value="10">10 水道 / Lanes</option>
+    </select>
+    
+    <button onclick="generateHeats()" id="generateBtn">📋 生成秩序冊 / Generate Heats</button>
+    <button onclick="calcTimeline()" id="timelineBtn">⏱️ 計算賽程 / Calculate Timeline</button>
+    <button onclick="window.print()">🖨️ 輸出PDF / Print PDF</button>
+    <button onclick="exportToExcel()" id="exportBtn">📊 匯出成績 / Export Results</button>
+  </div>
 </div>
 
-<div id="summary"></div>
-<div id="timeline"></div>
+<div id="summary" class="panel"></div>
+<div id="timeline" class="panel"></div>
 <div id="output"></div>
 
 <script>
-
-let swimmers=[]
-
-const MIN_TIME={
-"50":45,"100":90,"200":180,"400":420,"800":900,"1500":1700
-}
-
-// 中文欄位對應
-const fieldMap = {
-  "姓名": "Name",
-  "單位": "Unit",
-  "報名成績": "SeedTime",
-  "性別": "Gender",
-  "年齡組": "AgeGroup",
-  "出生年份": "BirthYear",
-  "項目": "Event"
+// ==================== 狀態管理 ====================
+const AppState = {
+  swimmers: [],
+  originalData: null,
+  isLoading: false,
+  lastGenerated: null,
+  currentLanguage: 'zh'
 };
 
-document.getElementById("excelFiles").addEventListener("change",function(e){
-  const files=e.target.files
-  for(let file of files){
-    const reader=new FileReader()
-    reader.onload=function(evt){
-      const data=new Uint8Array(evt.target.result)
-      const workbook=XLSX.read(data,{type:'array'})
-      const sheet=workbook.Sheets[workbook.SheetNames[0]]
-      let json=XLSX.utils.sheet_to_json(sheet)
-
-      json.forEach(r=>{
-        let newR={}
-        for(let k in fieldMap){
-          newR[fieldMap[k]] = r[k] || ""
-        }
-
-        if(!newR.SeedTime || newR.SeedTime==""){
-          newR.SeedTime="99:99.99"
-        }
-
-        if(!newR.AgeGroup && newR.BirthYear){
-          let age=new Date().getFullYear()-newR.BirthYear
-          if(age<=10) newR.AgeGroup="U10"
-          else if(age<=12) newR.AgeGroup="U12"
-          else if(age<=15) newR.AgeGroup="U15"
-          else newR.AgeGroup="OPEN"
-        }
-
-        swimmers.push(newR)
-      })
-    }
-    reader.readAsArrayBuffer(file)
+// ==================== 多國語系 ====================
+const I18N = {
+  zh: {
+    uploadTitle: '📁 上傳報名 Excel',
+    fileHint: '支援 .xlsx, .xls, .csv 格式',
+    settingTitle: '⚙️ 比賽設定',
+    lanesLabel: '水道數',
+    generateBtn: '📋 生成秩序冊',
+    timelineBtn: '⏱️ 計算賽程',
+    exportBtn: '📊 匯出成績',
+    fieldCheck: '📋 Excel欄位檢查',
+    detectedFields: '偵測欄位',
+    missingFields: '❌ 缺少必要欄位',
+    fieldsComplete: '✅ 欄位完整，可以匯入',
+    fieldsPartial: '⚠️ 部分欄位匹配，將嘗試轉換',
+    totalAthletes: '總人數',
+    male: '男子',
+    female: '女子',
+    totalHeats: '總組數',
+    estimatedTime: '⏱️ 預估總賽程時間',
+    minutes: '分',
+    seconds: '秒',
+    lane: '水道',
+    name: '姓名',
+    unit: '單位',
+    seedTime: '報名成績',
+    resultTime: '比賽成績',
+    rank: '名次',
+    heat: '第',
+    group: '組',
+    uploadFirst: '❌ 請先上傳選手資料',
+    generateFirst: '❌ 請先生成秩序冊',
+    exportSuccess: '✅ 成績匯出成功',
+    exportError: '❌ 匯出失敗',
+    importSuccess: '✅ 成功匯入',
+    athletes: '位選手',
+    error: '錯誤',
+    warning: '警告'
+  },
+  en: {
+    uploadTitle: '📁 Upload Entry Excel',
+    fileHint: 'Supports .xlsx, .xls, .csv formats',
+    settingTitle: '⚙️ Meet Settings',
+    lanesLabel: 'Lanes',
+    generateBtn: '📋 Generate Heats',
+    timelineBtn: '⏱️ Calculate Timeline',
+    exportBtn: '📊 Export Results',
+    fieldCheck: '📋 Excel Field Check',
+    detectedFields: 'Detected Fields',
+    missingFields: '❌ Missing Required Fields',
+    fieldsComplete: '✅ Fields Complete, Ready to Import',
+    fieldsPartial: '⚠️ Partial Field Match, Attempting Conversion',
+    totalAthletes: 'Total Athletes',
+    male: 'Male',
+    female: 'Female',
+    totalHeats: 'Total Heats',
+    estimatedTime: '⏱️ Estimated Total Time',
+    minutes: 'min',
+    seconds: 'sec',
+    lane: 'Lane',
+    name: 'Name',
+    unit: 'Team',
+    seedTime: 'Seed Time',
+    resultTime: 'Result Time',
+    rank: 'Rank',
+    heat: 'Heat',
+    group: '',
+    uploadFirst: '❌ Please upload athlete data first',
+    generateFirst: '❌ Please generate heats first',
+    exportSuccess: '✅ Results exported successfully',
+    exportError: '❌ Export failed',
+    importSuccess: '✅ Successfully imported',
+    athletes: 'athletes',
+    error: 'Error',
+    warning: 'Warning'
   }
-})
+};
 
-function timeToSeconds(t){
-  if(t=="99:99.99") return 9999
-  let p=t.split(":")
-  let s=p[1].split(".")
-  return parseInt(p[0])*60 + parseInt(s[0]) + parseInt(s[1])/100
+// ==================== 欄位映射（支援中英文）====================
+const FIELD_MAPPINGS = [
+  {
+    // 中文欄位
+    chinese: {
+      name: ['姓名', '名字', '選手姓名', '運動員'],
+      unit: ['單位', '隊伍', '學校', '俱樂部', '隊名'],
+      gender: ['性別', '性別男/女'],
+      birthYear: ['出生年份', '出生年', '生日', '出生日期', 'Year of Birth'],
+      event: ['項目', '比賽項目', '參賽項目'],
+      seedTime: ['報名成績', '成績', '最佳成績', '參賽成績']
+    }
+  },
+  {
+    // 英文欄位
+    english: {
+      name: ['Name', 'Athlete', 'Swimmer', 'Full Name'],
+      unit: ['Unit', 'Team', 'Club', 'School', 'Country'],
+      gender: ['Gender', 'Sex'],
+      birthYear: ['BirthYear', 'Birth Year', 'Year of Birth', 'DOB', 'Date of Birth'],
+      event: ['Event', 'Race', 'Competition'],
+      seedTime: ['SeedTime', 'Seed Time', 'Entry Time', 'Best Time', 'Personal Best']
+    }
+  }
+];
+
+// ==================== 標準化欄位 ====================
+const STANDARD_FIELDS = {
+  name: 'Name',
+  unit: 'Unit',
+  gender: 'Gender',
+  birthYear: 'BirthYear',
+  event: 'Event',
+  seedTime: 'SeedTime'
+};
+
+// ==================== 必要欄位（中英文對照）====================
+const REQUIRED_FIELDS = {
+  zh: ['姓名', '單位', '性別', '出生年份', '項目', '報名成績'],
+  en: ['Name', 'Unit', 'Gender', 'BirthYear', 'Event', 'SeedTime']
+};
+
+// ==================== 最小時間常數 ====================
+const MIN_TIME = {
+  "50": 45,
+  "100": 90,
+  "200": 180,
+  "400": 420,
+  "800": 900,
+  "1500": 1700
+};
+
+// ==================== 水道順序 ====================
+const LANE_ORDERS = {
+  6: [3, 4, 2, 5, 1, 6],
+  8: [4, 5, 3, 6, 2, 7, 1, 8],
+  10: [5, 6, 4, 7, 3, 8, 2, 9, 1, 10]
+};
+
+// ==================== 語言切換 ====================
+function setLanguage(lang) {
+  AppState.currentLanguage = lang;
+  
+  // 更新按鈕樣式
+  document.querySelectorAll('.language-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  // 更新UI文字
+  updateUILanguage();
 }
 
-function laneOrder(lanes){
-  if(lanes==6) return [3,4,2,5,1,6]
-  if(lanes==8) return [4,5,3,6,2,7,1,8]
-  if(lanes==10) return [5,6,4,7,3,8,2,9,1,10]
+function updateUILanguage() {
+  const t = I18N[AppState.currentLanguage];
+  
+  document.getElementById('uploadTitle').textContent = t.uploadTitle;
+  document.getElementById('fileHint').textContent = t.fileHint;
+  document.getElementById('settingTitle').textContent = t.settingTitle;
+  document.getElementById('lanesLabel').textContent = t.lanesLabel;
+  document.getElementById('generateBtn').textContent = t.generateBtn;
+  document.getElementById('timelineBtn').textContent = t.timelineBtn;
+  document.getElementById('exportBtn').textContent = t.exportBtn;
+  
+  // 重新整理顯示（如果有資料）
+  if (AppState.swimmers.length > 0) {
+    updateSummary();
+    if (AppState.lastGenerated) {
+      generateHeats();
+    }
+  }
 }
 
-function group(){
-  let g={}
-  swimmers.forEach(s=>{
-    let key=s.AgeGroup+" "+s.Gender+" "+s.Event
-    if(!g[key]) g[key]=[]
-    g[key].push(s)
-  })
-  return g
+function t(key) {
+  return I18N[AppState.currentLanguage][key] || key;
 }
 
-function serpentine(list,lanes){
-  list.sort((a,b)=>timeToSeconds(a.SeedTime)-timeToSeconds(b.SeedTime))
-  let heats=Math.ceil(list.length/lanes)
-  let grid=Array.from({length:heats},()=>[])
-  let index=0
-  for(let col=0;col<lanes;col++){
-    if(col%2==0){
-      for(let r=heats-1;r>=0;r--){
-        if(index<list.length) grid[r].push(list[index++])
+// ==================== UI 控制 ====================
+function showLoading(show = true) {
+  AppState.isLoading = show;
+  document.getElementById('loading').style.display = show ? 'block' : 'none';
+  ['generateBtn', 'timelineBtn', 'exportBtn'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = show;
+  });
+}
+
+function showMessage(message, isError = false) {
+  const summary = document.getElementById('summary');
+  summary.innerHTML = `<div class="${isError ? 'error' : 'ok'}">${message}</div>`;
+}
+
+// ==================== 檔案處理 ====================
+document.getElementById("excelFile").addEventListener("change", handleFileUpload);
+
+async function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  showLoading(true);
+  AppState.swimmers = [];
+  
+  try {
+    const data = await readFileAsync(file);
+    const workbook = XLSX.read(data, { type: 'array' });
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+    if (jsonData.length === 0) {
+      throw new Error(t('error') + ': Excel 檔案為空 / Excel file is empty');
+    }
+
+    // 欄位匹配和檢查
+    const headers = Object.keys(jsonData[0]);
+    const { matchedFields, missingFields, matchRate } = matchFields(headers);
+    
+    // 顯示欄位檢查結果
+    const fieldCheck = generateFieldCheckHTML(headers, matchedFields, missingFields, matchRate);
+    document.getElementById("fieldCheck").innerHTML = fieldCheck;
+
+    if (missingFields.length > 0 && matchRate < 0.5) {
+      // 匹配率太低，停止匯入
+      showMessage(t('fieldsPartial'), true);
+      showLoading(false);
+      return;
+    }
+
+    // 轉換資料
+    AppState.swimmers = jsonData.map(row => convertRowToSwimmer(row, matchedFields));
+    AppState.originalData = jsonData;
+    
+    updateSummary();
+    showMessage(`${t('importSuccess')} ${AppState.swimmers.length} ${t('athletes')}`, false);
+    
+  } catch (error) {
+    showMessage(`${t('error')}：${error.message}`, true);
+    console.error('檔案處理錯誤：', error);
+  } finally {
+    showLoading(false);
+  }
+}
+
+function readFileAsync(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = e => reject(new Error(t('error') + ': 讀取檔案失敗 / File read failed'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ==================== 欄位匹配（中英文自動識別）====================
+function matchFields(headers) {
+  const matchedFields = {};
+  const missingFields = [];
+  
+  // 建立所有可能的欄位名稱映射
+  const possibleNames = {};
+  
+  // 中文欄位
+  Object.entries(FIELD_MAPPINGS[0].chinese).forEach(([stdField, variations]) => {
+    possibleNames[stdField] = possibleNames[stdField] || [];
+    variations.forEach(v => possibleNames[stdField].push(v));
+  });
+  
+  // 英文欄位
+  Object.entries(FIELD_MAPPINGS[1].english).forEach(([stdField, variations]) => {
+    possibleNames[stdField] = possibleNames[stdField] || [];
+    variations.forEach(v => possibleNames[stdField].push(v));
+  });
+
+  // 匹配欄位
+  let matchedCount = 0;
+  const requiredStdFields = ['name', 'unit', 'gender', 'birthYear', 'event', 'seedTime'];
+  
+  requiredStdFields.forEach(stdField => {
+    let matched = false;
+    
+    // 嘗試匹配每個標頭
+    for (const header of headers) {
+      const headerStr = String(header).trim();
+      
+      // 檢查是否在可能的名稱列表中
+      if (possibleNames[stdField] && 
+          possibleNames[stdField].some(name => 
+            headerStr.toLowerCase() === name.toLowerCase() ||
+            headerStr.toLowerCase().includes(name.toLowerCase())
+          )) {
+        matchedFields[stdField] = header;
+        matched = true;
+        matchedCount++;
+        break;
       }
-    }else{
-      for(let r=0;r<heats;r++){
-        if(index<list.length) grid[r].push(list[index++])
+    }
+    
+    if (!matched) {
+      missingFields.push(stdField);
+    }
+  });
+
+  const matchRate = matchedCount / requiredStdFields.length;
+  
+  return { matchedFields, missingFields, matchRate };
+}
+
+function generateFieldCheckHTML(headers, matchedFields, missingFields, matchRate) {
+  const t = I18N[AppState.currentLanguage];
+  const matchRatePercent = Math.round(matchRate * 100);
+  
+  let html = `<h3>${t.fieldCheck}</h3>`;
+  html += `<p>${t.detectedFields}：${headers.join('、')}</p>`;
+  
+  html += '<p><strong>欄位匹配 / Field Mapping：</strong></p><ul>';
+  
+  const fieldNames = {
+    name: t.name,
+    unit: t.unit,
+    gender: '性別/Gender',
+    birthYear: '出生年份/BirthYear',
+    event: t.seedTime.split(' ')[0] + '/Event',
+    seedTime: t.seedTime
+  };
+  
+  Object.entries(matchedFields).forEach(([std, original]) => {
+    html += `<li style="color: #27ae60;">✅ ${fieldNames[std] || std} → ${original}</li>`;
+  });
+  
+  missingFields.forEach(std => {
+    html += `<li style="color: #c0392b;">❌ ${fieldNames[std] || std} (${t.missingFields})</li>`;
+  });
+  
+  html += '</ul>';
+  
+  if (missingFields.length === 0) {
+    html += `<div class="ok">✅ ${t.fieldsComplete} (匹配率 ${matchRatePercent}%)</div>`;
+  } else if (matchRate >= 0.5) {
+    html += `<div class="warning">⚠️ ${t.fieldsPartial} (匹配率 ${matchRatePercent}%)</div>`;
+  } else {
+    html += `<div class="error">❌ ${t.missingFields} (匹配率 ${matchRatePercent}%)</div>`;
+  }
+  
+  return html;
+}
+
+// ==================== 資料轉換 ====================
+function convertRowToSwimmer(row, matchedFields) {
+  const swimmer = {};
+  
+  // 使用匹配到的欄位名稱提取資料
+  Object.entries(matchedFields).forEach(([stdField, originalField]) => {
+    const value = row[originalField]?.toString().trim() || '';
+    
+    switch(stdField) {
+      case 'name':
+        swimmer.Name = value;
+        break;
+      case 'unit':
+        swimmer.Unit = value;
+        break;
+      case 'gender':
+        // 標準化性別
+        swimmer.Gender = standardizeGender(value);
+        break;
+      case 'birthYear':
+        swimmer.BirthYear = extractYear(value);
+        break;
+      case 'event':
+        swimmer.Event = value;
+        break;
+      case 'seedTime':
+        swimmer.SeedTime = standardizeTime(value);
+        break;
+    }
+  });
+
+  // 確保所有必要欄位都有值
+  swimmer.Name = swimmer.Name || 'Unknown';
+  swimmer.Unit = swimmer.Unit || 'Unknown';
+  swimmer.Gender = swimmer.Gender || 'U';
+  swimmer.BirthYear = swimmer.BirthYear || new Date().getFullYear() - 15;
+  swimmer.Event = swimmer.Event || 'Unknown';
+  swimmer.SeedTime = swimmer.SeedTime || '99:99.99';
+  
+  // 計算年齡組別
+  swimmer.AgeGroup = calculateAgeGroup(swimmer.BirthYear);
+
+  return swimmer;
+}
+
+function standardizeGender(gender) {
+  if (!gender) return 'U';
+  
+  const genderStr = gender.toString().toLowerCase().trim();
+  
+  if (['男', 'male', 'm', 'man', 'boy', '男性'].includes(genderStr)) {
+    return '男';
+  }
+  if (['女', 'female', 'f', 'woman', 'girl', '女性'].includes(genderStr)) {
+    return '女';
+  }
+  
+  return 'U'; // Unknown
+}
+
+function extractYear(yearValue) {
+  if (!yearValue) return new Date().getFullYear() - 15;
+  
+  const yearStr = yearValue.toString().trim();
+  
+  // 嘗試提取4位數年份
+  const match = yearStr.match(/\b(19|20)\d{2}\b/);
+  if (match) {
+    return parseInt(match[0]);
+  }
+  
+  // 如果是日期格式，嘗試解析
+  const date = new Date(yearStr);
+  if (!isNaN(date.getTime())) {
+    return date.getFullYear();
+  }
+  
+  // 預設返回
+  return new Date().getFullYear() - 15;
+}
+
+function standardizeTime(timeValue) {
+  if (!timeValue || timeValue === '') return '99:99.99';
+  
+  const timeStr = timeValue.toString().trim();
+  
+  // 檢查是否已經是 mm:ss.ff 格式
+  if (timeStr.match(/^\d{1,2}:\d{2}\.\d{2}$/)) {
+    return timeStr;
+  }
+  
+  // 嘗試轉換純秒數
+  const secondsMatch = timeStr.match(/^(\d+(?:\.\d+)?)$/);
+  if (secondsMatch) {
+    const totalSeconds = parseFloat(secondsMatch[1]);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = (totalSeconds % 60).toFixed(2);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.padStart(5, '0')}`;
+  }
+  
+  // 嘗試轉換其他格式
+  const parts = timeStr.split(/[:\.]/);
+  if (parts.length === 3) {
+    return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}.${parts[2].padStart(2, '0')}`;
+  }
+  
+  return '99:99.99';
+}
+
+function calculateAgeGroup(birthYear) {
+  if (!birthYear) return 'OPEN';
+  
+  const year = parseInt(birthYear);
+  if (isNaN(year)) return 'OPEN';
+  
+  const age = new Date().getFullYear() - year;
+  
+  if (age <= 10) return 'U10';
+  if (age <= 12) return 'U12';
+  if (age <= 15) return 'U15';
+  return 'OPEN';
+}
+
+// ==================== 時間處理 ====================
+function timeToSeconds(timeStr) {
+  if (!timeStr || timeStr === '99:99.99') return 9999;
+  
+  try {
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return 9999;
+    
+    const secParts = parts[1].split('.');
+    const minutes = parseInt(parts[0]) || 0;
+    const seconds = parseInt(secParts[0]) || 0;
+    const milliseconds = parseInt(secParts[1]) || 0;
+    
+    return minutes * 60 + seconds + milliseconds / 100;
+  } catch {
+    return 9999;
+  }
+}
+
+// ==================== 分組處理 ====================
+function groupEvents() {
+  const groups = {};
+  
+  AppState.swimmers.forEach(swimmer => {
+    const key = `${swimmer.AgeGroup} ${swimmer.Gender} ${swimmer.Event}`.trim();
+    if (!groups[key]) {
+      groups[key] = [];
+    }
+    groups[key].push(swimmer);
+  });
+
+  // 依照年齡排序
+  return Object.fromEntries(
+    Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
+  );
+}
+
+function serpentineSort(athletes, lanes) {
+  // 依成績排序
+  const sorted = [...athletes].sort((a, b) => 
+    timeToSeconds(a.SeedTime) - timeToSeconds(b.SeedTime)
+  );
+
+  const heatsCount = Math.ceil(sorted.length / lanes);
+  const grid = Array.from({ length: heatsCount }, () => []);
+
+  let index = 0;
+  for (let col = 0; col < lanes; col++) {
+    if (col % 2 === 0) {
+      // 偶數欄：從下到上
+      for (let row = heatsCount - 1; row >= 0; row--) {
+        if (index < sorted.length) {
+          grid[row][col] = sorted[index++];
+        }
+      }
+    } else {
+      // 奇數欄：從上到下
+      for (let row = 0; row < heatsCount; row++) {
+        if (index < sorted.length) {
+          grid[row][col] = sorted[index++];
+        }
       }
     }
   }
-  return grid
+
+  return grid;
 }
 
-function generate(){
-  let lanes=parseInt(document.getElementById("lanes").value)
-  let groups=group()
-  let output=document.getElementById("output")
-  let summary=document.getElementById("summary")
-  output.innerHTML=""
-  let totalHeats=0
-
-  for(let k in groups){
-    let heats=serpentine(groups[k],lanes)
-    totalHeats+=heats.length
-    output.innerHTML+=`<h2>${k}</h2>`
-    heats.forEach((heat,i)=>{
-      let order=laneOrder(lanes)
-      let html=`<h3>第${i+1}組</h3>`
-      html+=`<table>
-      <tr><th>水道</th><th>單位</th><th>姓名</th><th>報名成績</th><th>比賽成績</th></tr>`
-      heat.forEach((s,idx)=>{
-        html+=`<tr>
-        <td>${order[idx]}</td>
-        <td>${s.Unit}</td>
-        <td>${s.Name}</td>
-        <td>${s.SeedTime}</td>
-        <td></td>
-        </tr>`
-      })
-      html+="</table>"
-      output.innerHTML+=html
-    })
+// ==================== 秩序冊生成 ====================
+function generateHeats() {
+  if (AppState.swimmers.length === 0) {
+    showMessage(t('uploadFirst'), true);
+    return;
   }
 
-  summary.innerHTML=`<h2>選手總數：${swimmers.length}　總組數：${totalHeats}</h2>`
-}
+  showLoading(true);
+  
+  try {
+    const lanes = parseInt(document.getElementById("lanes").value);
+    const groups = groupEvents();
+    let html = '';
+    let totalHeats = 0;
 
-function calcTimeline(){
-  let groups=group()
-  let total=0
-  let report=""
-  for(let key in groups){
-    let athletes=groups[key]
-    let times=athletes.map(s=>timeToSeconds(s.SeedTime))
-    let valid=times.filter(t=>t<9000)
-    let base
-    if(valid.length==0){
-      let first=athletes[0]
-      let distMatch=first.Event? first.Event.match(/\d+/) : null
-      let dist=distMatch? distMatch[0] : null
-      base=MIN_TIME[dist] || 60
-    }else{
-      base=Math.max(...valid)
+    for (const [eventName, athletes] of Object.entries(groups)) {
+      const heats = serpentineSort(athletes, lanes);
+      totalHeats += heats.length;
+
+      html += `<h2 style="background: #3498db; color: white; padding: 10px; border-radius: 5px;">🏊 ${eventName}</h2>`;
+
+      heats.forEach((heat, heatIndex) => {
+        const validAthletes = heat.filter(cell => cell !== undefined);
+        
+        html += `
+          <div style="margin-bottom: 30px;">
+            <h3 style="color: #2c3e50;">${t('heat')} ${heatIndex + 1} ${t('group')} (${validAthletes.length} ${t('athletes')})</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>${t('lane')}</th>
+                  <th>${t('name')}</th>
+                  <th>${t('unit')}</th>
+                  <th>${t('seedTime')}</th>
+                  <th>${t('resultTime')}</th>
+                  <th>${t('rank')}</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        const laneOrder = LANE_ORDERS[lanes] || LANE_ORDERS[8];
+        
+        laneOrder.forEach((lane, idx) => {
+          const athlete = heat[idx];
+          if (athlete) {
+            html += `
+              <tr data-athlete-id="${athlete.Name}_${athlete.Unit}">
+                <td><strong>${lane}</strong></td>
+                <td>${athlete.Name || '--'}</td>
+                <td>${athlete.Unit || '--'}</td>
+                <td>${athlete.SeedTime || '--:--.--'}</td>
+                <td><input class="score" placeholder="--:--.--" onchange="updateScore(this)"></td>
+                <td><input type="number" min="1" style="width: 50px;" placeholder="${t('rank')}"></td>
+              </tr>
+            `;
+          }
+        });
+
+        html += '</tbody></table></div>';
+      });
     }
-    let eventTime=base+30
-    total+=eventTime
-    report+=`<p>${key} 約 ${Math.round(eventTime)} 秒</p>`
+
+    document.getElementById("output").innerHTML = html;
+    AppState.lastGenerated = { lanes, groups, totalHeats };
+    
+    updateSummary(totalHeats);
+    showMessage(`✅ ${t('generateBtn')} - ${totalHeats} ${t('totalHeats')}`, false);
+    
+  } catch (error) {
+    showMessage(`❌ ${t('error')}：${error.message}`, true);
+    console.error('生成錯誤：', error);
+  } finally {
+    showLoading(false);
   }
-  document.getElementById("timeline").innerHTML=
-  `<h2>預估整場賽事時間：${Math.round(total/60)} 分鐘</h2>`+report
 }
 
+// ==================== 賽程時間計算 ====================
+function calcTimeline() {
+  if (AppState.swimmers.length === 0) {
+    showMessage(t('uploadFirst'), true);
+    return;
+  }
+
+  const groups = groupEvents();
+  let totalSeconds = 0;
+  let report = `<h3>📊 ${t('estimatedTime')}：</h3><ul>`;
+
+  for (const [eventName, athletes] of Object.entries(groups)) {
+    const times = athletes.map(a => timeToSeconds(a.SeedTime));
+    const validTimes = times.filter(t => t < 9000);
+    
+    let baseTime;
+    if (validTimes.length === 0) {
+      // 從項目名稱提取距離
+      const distance = eventName.match(/\d+/)?.[0] || '100';
+      baseTime = MIN_TIME[distance] || 60;
+    } else {
+      baseTime = Math.max(...validTimes);
+    }
+
+    const eventTime = baseTime + 30; // 每組加30秒緩衝
+    totalSeconds += eventTime;
+    
+    const minutes = Math.floor(eventTime / 60);
+    const seconds = eventTime % 60;
+    report += `<li>${eventName}：${minutes} ${t('minutes')} ${seconds.toFixed(0)} ${t('seconds')}</li>`;
+  }
+
+  report += '</ul>';
+  
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  
+  document.getElementById("timeline").innerHTML = `
+    <h2 style="color: #27ae60;">${t('estimatedTime')}：${totalMinutes} ${t('minutes')} ${remainingSeconds.toFixed(0)} ${t('seconds')}</h2>
+    ${report}
+  `;
+}
+
+// ==================== 成績匯出 ====================
+function exportToExcel() {
+  if (!AppState.lastGenerated) {
+    showMessage(t('generateFirst'), true);
+    return;
+  }
+
+  try {
+    // 收集所有成績
+    const results = [];
+    const tables = document.querySelectorAll('#output table');
+    
+    tables.forEach(table => {
+      const rows = table.querySelectorAll('tbody tr');
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 6) {
+          results.push({
+            [t('lane')]: cells[0].textContent,
+            [t('name')]: cells[1].textContent,
+            [t('unit')]: cells[2].textContent,
+            [t('seedTime')]: cells[3].textContent,
+            [t('resultTime')]: cells[4].querySelector('input')?.value || '',
+            [t('rank')]: cells[5].querySelector('input')?.value || ''
+          });
+        }
+      });
+    });
+
+    // 建立 Excel
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(results);
+    XLSX.utils.book_append_sheet(wb, ws, 'Results');
+    XLSX.writeFile(wb, `swim_results_${new Date().toISOString().slice(0,10)}.xlsx`);
+    
+    showMessage(t('exportSuccess'), false);
+  } catch (error) {
+    showMessage(`${t('exportError')}：${error.message}`, true);
+  }
+}
+
+// ==================== 成績更新 ====================
+function updateScore(input) {
+  const value = input.value.trim();
+  if (value && !value.match(/^\d{1,2}:\d{2}\.\d{2}$/)) {
+    input.style.borderColor = '#e74c3c';
+    showMessage('⚠️ ' + t('seedTime') + ' 格式請用 mm:ss.ff', true);
+  } else {
+    input.style.borderColor = '#27ae60';
+  }
+}
+
+// ==================== 摘要更新 ====================
+function updateSummary(heatsCount = 0) {
+  const genderCount = {
+    男: AppState.swimmers.filter(s => s.Gender === '男').length,
+    女: AppState.swimmers.filter(s => s.Gender === '女').length,
+    U: AppState.swimmers.filter(s => s.Gender === 'U').length
+  };
+  
+  const ageGroups = AppState.swimmers.reduce((acc, s) => {
+    acc[s.AgeGroup] = (acc[s.AgeGroup] || 0) + 1;
+    return acc;
+  }, {});
+
+  const ageGroupHtml = Object.entries(ageGroups)
+    .map(([group, count]) => `<span class="stat-item">${group}: ${count}</span>`)
+    .join('');
+
+  document.getElementById("summary").innerHTML = `
+    <div class="summary-stats">
+      <span class="stat-item">${t('totalAthletes')}: ${AppState.swimmers.length}</span>
+      <span class="stat-item">${t('male')}: ${genderCount.男}</span>
+      <span class="stat-item">${t('female')}: ${genderCount.女}</span>
+      ${genderCount.U > 0 ? `<span class="stat-item">Unknown: ${genderCount.U}</span>` : ''}
+      ${heatsCount ? `<span class="stat-item">${t('totalHeats')}: ${heatsCount}</span>` : ''}
+    </div>
+    <div class="summary-stats" style="margin-top: 10px;">
+      ${ageGroupHtml}
+    </div>
+  `;
+}
+
+// ==================== 初始化 ====================
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Swim Meet Manager initialized');
+  updateUILanguage();
+  updateSummary();
+});
 </script>
+
 </body>
 </html>
