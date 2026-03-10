@@ -114,12 +114,12 @@ button:disabled {
   background-color: #e8f4f8;
 }
 
-/* 水道顏色標示 */
-.lane-1, .lane-2 { background-color: #fff3e0; }
-.lane-3, .lane-6 { background-color: #ffe0b2; }
-.lane-4, .lane-5 { background-color: #ffcc80; }
-.lane-7, .lane-8 { background-color: #fff3e0; }
-.lane-9, .lane-10 { background-color: #f5f5f5; }
+/* 水道顏色標示 - 越中間顏色越深 */
+.lane-1, .lane-10 { background-color: #fff3e0; }
+.lane-2, .lane-9 { background-color: #fff3e0; }
+.lane-3, .lane-8 { background-color: #ffe0b2; }
+.lane-4, .lane-7 { background-color: #ffe0b2; }
+.lane-5, .lane-6 { background-color: #ffcc80; }
 
 /* 檢錄欄位 */
 .check-column {
@@ -191,6 +191,16 @@ button:disabled {
   color: white;
   padding: 10px 20px;
   border-radius: 5px;
+}
+
+.stat-item-small {
+  background: #27ae60;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-size: 14px;
+  margin: 2px;
+  display: inline-block;
 }
 
 .age-group-settings {
@@ -319,9 +329,26 @@ button:disabled {
 .ok { color: #27ae60; font-weight: bold; }
 .error { color: #e74c3c; font-weight: bold; }
 
+/* 檔案列表樣式 */
+.file-list {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f0f0f0;
+  border-radius: 5px;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.file-item {
+  padding: 5px;
+  border-bottom: 1px solid #ddd;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
 /* 列印樣式 */
 @media print {
-  button, .panel, #fieldCheck, #timeline, .age-group-settings, .event-order-panel, .print-buttons, #loading {
+  button, .panel, #fieldCheck, #timeline, .age-group-settings, .event-order-panel, .print-buttons, #loading, .file-list {
     display: none !important;
   }
   
@@ -372,9 +399,18 @@ button:disabled {
 <h1>🏊 游泳比賽管理系統 - 秩序冊專業版</h1>
 
 <div class="panel">
-  <h3>📁 上傳報名 Excel</h3>
-  <input type="file" id="excelFile" accept=".xlsx,.xls,.csv">
-  <small style="color: #7f8c8d; margin-left: 10px;">支援 .xlsx, .xls, .csv 格式</small>
+  <h3>📁 上傳報名 Excel (可多個檔案累加)</h3>
+  <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" multiple>
+  <small style="color: #7f8c8d; margin-left: 10px;">支援 .xlsx, .xls, .csv 格式，可一次選取多個檔案</small>
+  
+  <div id="fileList" class="file-list" style="display: none;">
+    <h4>已上傳檔案：</h4>
+    <div id="fileItems"></div>
+  </div>
+  
+  <div style="margin-top: 10px;">
+    <button onclick="clearAllData()">清除所有資料</button>
+  </div>
 </div>
 
 <div id="fieldCheck" class="panel"></div>
@@ -421,6 +457,7 @@ button:disabled {
     <div style="margin: 10px 0;">
       <button onclick="clearEventOrder()">清除所有順序</button>
       <button onclick="resetToDefaultOrder()">恢復預設順序</button>
+      <button onclick="autoAddEvents()">自動加入Excel所有項目</button>
     </div>
     
     <div class="event-category">
@@ -500,7 +537,8 @@ button:disabled {
   <div class="print-buttons">
     <button onclick="printHeats()">🖨️ 列印秩序冊</button>
     <button onclick="downloadPDF()">📥 下載秩序冊(PDF)</button>
-    <button onclick="exportToExcel()" id="exportBtn">📊 匯出成績</button>
+    <button onclick="exportToExcel()" id="exportBtn">📊 匯出成績(Excel)</button>
+    <button onclick="exportRankings()" id="exportRankingsBtn">🏆 匯出名次總表</button>
   </div>
 </div>
 
@@ -512,7 +550,7 @@ button:disabled {
 // ==================== 狀態管理 ====================
 const AppState = {
   swimmers: [],
-  originalData: null,
+  uploadedFiles: [],
   isLoading: false,
   lastGenerated: null,
   eventOrder: [], // 儲存項目順序
@@ -552,11 +590,22 @@ const AGE_GROUP_ORDER = [
   '6-10歲', '11-15歲', '16-20歲', '21+', '5歲以下', '小學以上'
 ];
 
+// ==================== 多國語言對照表 ====================
+const LANG_MAP = {
+  '姓名': ['姓名', 'Name', '名字', 'Athlete', 'Swimmer'],
+  '單位': ['單位', 'Unit', '隊伍', 'Team', 'Club'],
+  '性別': ['性別', 'Gender', 'Sex'],
+  '年齡': ['年齡', 'Age', '歲數'],
+  '出生年份': ['出生年份', 'BirthYear', '出生年', 'Year', 'Birth Year'],
+  '項目': ['項目', 'Event', 'Race', '比賽項目'],
+  '成績': ['成績', 'Time', 'SeedTime', '報名成績', 'Seed Time']
+};
+
 // ==================== UI 控制 ====================
 function showLoading(show = true) {
   AppState.isLoading = show;
   document.getElementById('loading').style.display = show ? 'block' : 'none';
-  ['generateBtn', 'timelineBtn', 'exportBtn'].forEach(id => {
+  ['generateBtn', 'timelineBtn', 'exportBtn', 'exportRankingsBtn'].forEach(id => {
     const btn = document.getElementById(id);
     if (btn) btn.disabled = show;
   });
@@ -567,45 +616,97 @@ function showMessage(message, isError = false) {
   summary.innerHTML = `<div class="${isError ? 'error' : 'ok'}">${message}</div>`;
 }
 
+function updateFileList() {
+  const fileListDiv = document.getElementById('fileList');
+  const fileItemsDiv = document.getElementById('fileItems');
+  
+  if (AppState.uploadedFiles.length === 0) {
+    fileListDiv.style.display = 'none';
+    return;
+  }
+  
+  fileListDiv.style.display = 'block';
+  fileItemsDiv.innerHTML = AppState.uploadedFiles.map(f => 
+    `<div class="file-item">📄 ${f.name} (${new Date(f.time).toLocaleTimeString()})</div>`
+  ).join('');
+}
+
+function clearAllData() {
+  if (confirm('確定要清除所有已上傳的資料嗎？')) {
+    AppState.swimmers = [];
+    AppState.uploadedFiles = [];
+    document.getElementById('excelFile').value = '';
+    updateFileList();
+    updateSummary();
+    document.getElementById('fieldCheck').innerHTML = '';
+    document.getElementById('output').innerHTML = '';
+    document.getElementById('timeline').innerHTML = '';
+    showMessage('✅ 所有資料已清除', false);
+  }
+}
+
 // ==================== 檔案處理 ====================
 document.getElementById("excelFile").addEventListener("change", handleFileUpload);
 
 async function handleFileUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+  const files = Array.from(e.target.files);
+  if (!files || files.length === 0) return;
 
   showLoading(true);
-  AppState.swimmers = [];
   
   try {
-    const data = await readFileAsync(file);
-    const workbook = XLSX.read(data, { type: 'array' });
-    const firstSheetName = workbook.SheetNames[0];
-    const firstSheet = workbook.Sheets[firstSheetName];
-    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+    let totalNewSwimmers = 0;
+    
+    for (const file of files) {
+      const data = await readFileAsync(file);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const firstSheet = workbook.Sheets[firstSheetName];
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
 
-    if (jsonData.length < 2) throw new Error('Excel 檔案為空或格式錯誤');
+      if (jsonData.length < 2) {
+        showMessage(`⚠️ 檔案 ${file.name} 為空或格式錯誤，已跳過`, true);
+        continue;
+      }
 
-    const headers = jsonData[0] || [];
-    const dataRows = jsonData.slice(1).filter(row => row.some(cell => cell && cell.toString().trim() !== ''));
-    
-    if (dataRows.length === 0) throw new Error('沒有找到任何選手資料');
-    
-    AppState.swimmers = parseSwimmerData(headers, dataRows);
-    
-    if (AppState.swimmers.length === 0) {
-      throw new Error('沒有成功解析任何選手資料，請檢查Excel欄位名稱是否正確');
+      const headers = jsonData[0] || [];
+      const dataRows = jsonData.slice(1).filter(row => row.some(cell => cell && cell.toString().trim() !== ''));
+      
+      if (dataRows.length === 0) {
+        showMessage(`⚠️ 檔案 ${file.name} 沒有選手資料，已跳過`, true);
+        continue;
+      }
+      
+      const newSwimmers = parseSwimmerData(headers, dataRows);
+      
+      if (newSwimmers.length > 0) {
+        AppState.swimmers = AppState.swimmers.concat(newSwimmers);
+        AppState.uploadedFiles.push({
+          name: file.name,
+          time: new Date(),
+          count: newSwimmers.length
+        });
+        totalNewSwimmers += newSwimmers.length;
+      }
     }
     
-    updateAgeGroupSettings();
-    updateSummary();
-    showFieldCheck(headers, dataRows.length);
+    if (totalNewSwimmers > 0) {
+      updateAgeGroupSettings();
+      updateSummary();
+      updateFileList();
+      showFieldCheck();
+      showMessage(`✅ 成功累加 ${totalNewSwimmers} 位選手，總人數 ${AppState.swimmers.length}`, false);
+    } else {
+      showMessage('❌ 沒有成功解析任何選手資料', true);
+    }
     
   } catch (error) {
     showMessage(`❌ 錯誤：${error.message}`, true);
     console.error('檔案處理錯誤：', error);
   } finally {
     showLoading(false);
+    // 清除input值，以便再次上傳同一個檔案
+    e.target.value = '';
   }
 }
 
@@ -618,49 +719,71 @@ function readFileAsync(file) {
   });
 }
 
+function findColumnIndexByLang(headers, possibleNamesList) {
+  for (let i = 0; i < headers.length; i++) {
+    const header = headers[i]?.toString().toLowerCase().trim() || '';
+    for (const possibleNames of possibleNamesList) {
+      for (const name of possibleNames) {
+        if (header.includes(name.toLowerCase())) {
+          return i;
+        }
+      }
+    }
+  }
+  return -1;
+}
+
 function parseSwimmerData(headers, rows) {
   const swimmers = [];
   
-  const nameIndices = findColumnIndices(headers, ['姓名', 'Name', '名字']);
-  const unitIndices = findColumnIndices(headers, ['單位', 'Unit', '隊伍', 'Team']);
-  const genderIndices = findColumnIndices(headers, ['性別', 'Gender', 'Sex']);
-  // 優先找直接寫好的年齡，再來找出生年份
-  const ageIndices = findColumnIndices(headers, ['年齡', 'Age', '歲數']);
-  const birthYearIndices = findColumnIndices(headers, ['出生年份', 'BirthYear', '出生年', 'Year']);
+  // 使用多語言對照表找出各欄位索引
+  const nameIndex = findColumnIndexByLang(headers, [LANG_MAP['姓名']]);
+  const unitIndex = findColumnIndexByLang(headers, [LANG_MAP['單位']]);
+  const genderIndex = findColumnIndexByLang(headers, [LANG_MAP['性別']]);
+  const ageIndex = findColumnIndexByLang(headers, [LANG_MAP['年齡']]);
+  const birthYearIndex = findColumnIndexByLang(headers, [LANG_MAP['出生年份']]);
   
+  // 找出所有項目和成績欄位
   const eventIndices = [];
   const timeIndices = [];
   
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i]?.toString().toLowerCase() || '';
-    if (header.includes('項目') || header.includes('event')) eventIndices.push(i);
-    if (header.includes('成績') || header.includes('time') || header.includes('seed')) timeIndices.push(i);
+    if (LANG_MAP['項目'].some(keyword => header.includes(keyword.toLowerCase()))) {
+      eventIndices.push(i);
+    }
+    if (LANG_MAP['成績'].some(keyword => header.includes(keyword.toLowerCase()))) {
+      timeIndices.push(i);
+    }
   }
 
-  if (nameIndices.length === 0 && headers.length > 0) nameIndices.push(0);
-  if (unitIndices.length === 0 && headers.length > 1) unitIndices.push(1);
-  if (genderIndices.length === 0 && headers.length > 2) genderIndices.push(2);
+  // 如果找不到特定欄位，嘗試用位置判斷
+  const nameIdx = nameIndex !== -1 ? nameIndex : 0;
+  const unitIdx = unitIndex !== -1 ? unitIndex : 1;
+  const genderIdx = genderIndex !== -1 ? genderIndex : 2;
 
   rows.forEach((row) => {
-    const name = getCellValue(row, nameIndices[0]);
-    const unit = getCellValue(row, unitIndices[0]);
-    const gender = getCellValue(row, genderIndices[0]);
+    const name = getCellValue(row, nameIdx);
+    const unit = getCellValue(row, unitIdx);
+    const gender = getCellValue(row, genderIdx);
     
     if (!name || !unit) return;
     
-    // 計算年齡：支援民國年與直接填寫年齡
-    let age = 15; // 預設值
-    if (ageIndices.length > 0 && getCellValue(row, ageIndices[0])) {
-      age = parseInt(getCellValue(row, ageIndices[0])) || 15;
-    } else if (birthYearIndices.length > 0) {
-      const birthYear = getCellValue(row, birthYearIndices[0]);
+    // 計算年齡
+    let age = 15;
+    if (ageIndex !== -1 && getCellValue(row, ageIndex)) {
+      age = parseInt(getCellValue(row, ageIndex)) || 15;
+    } else if (birthYearIndex !== -1) {
+      const birthYear = getCellValue(row, birthYearIndex);
       age = calculateAge(birthYear);
     } else if (headers.length > 3) {
       age = calculateAge(getCellValue(row, 3));
     }
     
+    // 處理項目
     const maxEvents = Math.min(eventIndices.length, 10);
     if (maxEvents === 0) {
+      // 如果找不到項目欄位，嘗試從第4欄開始每兩欄一組
       for (let i = 4; i < row.length; i += 2) {
         if (i < row.length) {
           const event = getCellValue(row, i);
@@ -692,55 +815,47 @@ function parseSwimmerData(headers, rows) {
   return swimmers;
 }
 
-function findColumnIndices(headers, possibleNames) {
-  const indices = [];
-  for (let i = 0; i < headers.length; i++) {
-    const header = headers[i]?.toString().toLowerCase() || '';
-    for (const name of possibleNames) {
-      if (header.includes(name.toLowerCase())) {
-        indices.push(i);
-        break;
-      }
-    }
-  }
-  return indices;
-}
-
 function getCellValue(row, index) {
   if (index === undefined || index < 0 || index >= row.length) return '';
   const value = row[index];
   return value !== undefined && value !== null ? value.toString().trim() : '';
 }
 
-function showFieldCheck(headers, rowCount) {
+function showFieldCheck() {
   const fieldCheck = document.getElementById('fieldCheck');
-  const nameFields = headers.filter(h => h && (h.includes('姓名') || h.includes('Name'))).length;
-  const eventFields = headers.filter(h => h && (h.includes('項目') || h.includes('Event'))).length;
   
+  // 統計各年齡組人數
   const ageGroups = {};
   AppState.swimmers.forEach(s => {
     if (s.AgeGroup) { ageGroups[s.AgeGroup] = (ageGroups[s.AgeGroup] || 0) + 1; }
   });
   
-  const ageGroupSummary = Object.entries(ageGroups).map(([group, count]) => `${group}: ${count}人`).join(' · ');
+  const ageGroupSummary = Object.entries(ageGroups)
+    .sort(([a], [b]) => {
+      const aIndex = AGE_GROUP_ORDER.indexOf(a);
+      const bIndex = AGE_GROUP_ORDER.indexOf(b);
+      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+    })
+    .map(([group, count]) => `<span class="stat-item-small">${group}: ${count}人</span>`)
+    .join(' ');
   
   fieldCheck.innerHTML = `
-    <h3>📋 Excel欄位檢查</h3>
-    <p>偵測到 ${headers.length} 個欄位</p>
-    <p>資料列數：${rowCount} 列</p>
-    <p>姓名欄位：${nameFields > 0 ? '✅' : '❌'}</p>
-    <p>項目欄位：${eventFields > 0 ? '✅' : '❌'} (找到 ${eventFields} 個項目欄位)</p>
-    <p>成功匯入 ${AppState.swimmers.length} 筆報名資料</p>
-    <p>年齡組別：${ageGroupSummary || '無（請檢查是否超過年齡限制）'}</p>
-    <div class="ok">✅ 資料解析完成，可以生成秩序冊</div>
+    <h3>📋 資料統計</h3>
+    <div class="summary-stats">
+      <div class="stat-item">👥 總選手數: ${AppState.swimmers.length} 人</div>
+      <div class="stat-item">📝 總報名項次: ${AppState.swimmers.length} 項</div>
+    </div>
+    <div style="margin-top: 10px; text-align: center;">
+      ${ageGroupSummary || '無年齡組別資料'}
+    </div>
   `;
 }
 
 function standardizeGender(gender) {
   if (!gender) return 'U';
   const g = gender.toString().toLowerCase().trim();
-  if (['男', 'male', 'm', 'man', 'boy'].includes(g)) return '男';
-  if (['女', 'female', 'f', 'woman', 'girl'].includes(g)) return '女';
+  if (['男', 'male', 'm', 'man', 'boy', '男生'].includes(g)) return '男';
+  if (['女', 'female', 'f', 'woman', 'girl', '女生'].includes(g)) return '女';
   return 'U';
 }
 
@@ -750,7 +865,7 @@ function calculateAge(birthYearValue) {
   let year = parseInt(yearStr.replace(/\D/g, ''));
   if (isNaN(year)) return 15;
 
-  // 支援民國年(例如填寫 105 會自動轉換為 2016)
+  // 支援民國年
   if (year > 0 && year <= 200) {
       year += 1911;
   }
@@ -799,6 +914,7 @@ function updateAgeGroupSettings() {
   customRangeDiv.style.display = ageGroupType === 'custom' ? 'flex' : 'none';
   
   AppState.swimmers.forEach(s => { s.AgeGroup = getAgeGroup(s.Age); });
+  showFieldCheck();
 }
 
 function getAgeGroup(age) {
@@ -885,14 +1001,42 @@ function drop(ev) {
 }
 
 function addToOrder(event) {
-  if (!AppState.eventOrder.includes(event)) { AppState.eventOrder.push(event); renderEventOrder(); }
+  if (!AppState.eventOrder.includes(event)) { 
+    AppState.eventOrder.push(event); 
+    renderEventOrder(); 
+  }
 }
+
 function removeFromOrder(event) {
   const index = AppState.eventOrder.indexOf(event);
-  if (index > -1) { AppState.eventOrder.splice(index, 1); renderEventOrder(); }
+  if (index > -1) { 
+    AppState.eventOrder.splice(index, 1); 
+    renderEventOrder(); 
+  }
 }
-function clearEventOrder() { AppState.eventOrder = []; renderEventOrder(); }
-function resetToDefaultOrder() { AppState.eventOrder = [...DEFAULT_EVENT_ORDER]; renderEventOrder(); }
+
+function clearEventOrder() { 
+  AppState.eventOrder = []; 
+  renderEventOrder(); 
+}
+
+function resetToDefaultOrder() { 
+  AppState.eventOrder = [...DEFAULT_EVENT_ORDER]; 
+  renderEventOrder(); 
+}
+
+function autoAddEvents() {
+  const events = new Set();
+  AppState.swimmers.forEach(s => {
+    events.add(s.Event);
+  });
+  events.forEach(e => {
+    if (!AppState.eventOrder.includes(e)) {
+      AppState.eventOrder.push(e);
+    }
+  });
+  renderEventOrder();
+}
 
 // ==================== 分組處理 ====================
 function groupEvents() {
@@ -906,23 +1050,44 @@ function groupEvents() {
   return groups;
 }
 
+// 修正的水道排序函數 - 慢的在第一組，快的在最後一組
 function serpentineSort(athletes, lanes) {
+  // 依成績排序（慢的在前，快的在後）
   const sorted = [...athletes].sort((a, b) => timeToSeconds(a.SeedTime) - timeToSeconds(b.SeedTime));
+  
   const heatsCount = Math.ceil(sorted.length / lanes);
   const grid = Array.from({ length: heatsCount }, () => []);
+  
+  // 從慢到快分配
   let index = 0;
-  for (let col = 0; col < lanes; col++) {
-    if (col % 2 === 0) {
-      for (let row = heatsCount - 1; row >= 0; row--) {
-        if (index < sorted.length) grid[row][col] = sorted[index++];
-      }
-    } else {
-      for (let row = 0; row < heatsCount; row++) {
-        if (index < sorted.length) grid[row][col] = sorted[index++];
+  for (let row = 0; row < heatsCount; row++) {
+    for (let col = 0; col < lanes; col++) {
+      if (index < sorted.length) {
+        grid[row][col] = sorted[index++];
       }
     }
   }
+  
+  // 反轉組別順序，讓快的在最後一組
   return grid;
+}
+
+// 水道位置分配 - 按照成績安排水道位置
+function assignLanes(heat, lanes) {
+  const laneOrder = LANE_ORDERS[lanes] || LANE_ORDERS[8];
+  const result = new Array(lanes);
+  
+  // 將選手依成績排序（快的在後）
+  const sorted = [...heat].sort((a, b) => timeToSeconds(a.SeedTime) - timeToSeconds(b.SeedTime));
+  
+  // 依照水道順序分配選手
+  laneOrder.forEach((lane, index) => {
+    if (index < sorted.length) {
+      result[lane - 1] = sorted[index];
+    }
+  });
+  
+  return result;
 }
 
 // ==================== 秩序冊生成 ====================
@@ -959,7 +1124,7 @@ function generateHeats() {
       [...AppState.eventOrder] : 
       [...DEFAULT_EVENT_ORDER];
 
-    // 新增：把 Excel 裡面有，但是你沒有放在排序清單裡面的項目，自動丟到最後面（避免被消失）
+    // 自動加入有選手的項目
     availableEvents.forEach(ev => {
       if (!orderedEvents.includes(ev)) {
         orderedEvents.push(ev);
@@ -983,6 +1148,7 @@ function generateHeats() {
         });
 
       for (const [fullEventName, athletes] of eventGroups) {
+        // 先分組，慢的在第一組
         const heats = serpentineSort(athletes, lanes);
         const ageGroup = fullEventName.split(' ')[0];
         const eventName = fullEventName.split(' ').slice(1).join(' ');
@@ -990,6 +1156,9 @@ function generateHeats() {
         
         heats.forEach((heat, heatIndex) => {
           const totalHeatsForEvent = heats.length;
+          
+          // 為這一組分配水道位置
+          const assignedHeat = assignLanes(heat, lanes);
           
           html += `
             <div class="event-header">
@@ -1011,24 +1180,24 @@ function generateHeats() {
               <tbody>
           `;
 
-          const laneOrder = LANE_ORDERS[lanes] || LANE_ORDERS[8];
-          laneOrder.forEach((lane, idx) => {
-            const athlete = heat[idx];
+          // 依照水道1到lanes順序顯示
+          for (let lane = 1; lane <= lanes; lane++) {
+            const athlete = assignedHeat[lane - 1];
             if (athlete) {
               const laneClass = `lane-${lane}`;
               html += `
-                <tr class="${laneClass}">
-                  <td class="check-column"><input type="checkbox" class="check-input"></td>
+                <tr class="${laneClass}" data-athlete-id="${athlete.Name}_${athlete.Unit}">
+                  <td class="check-column"><input type="checkbox" class="check-input" data-heat="${heatCounter}" data-lane="${lane}"></td>
                   <td><strong>${lane}</strong></td>
                   <td>${athlete.Unit || '--'}</td>
                   <td>${athlete.Name || '--'}</td>
                   <td>${athlete.SeedTime || '--:--.--'}</td>
-                  <td><input class="score-input" placeholder="--:--.--" onchange="updateScore(this, '${heatIndex}_${idx}')"></td>
-                  <td class="remark-column"><input type="text" class="remark-input" placeholder="備註"></td>
+                  <td><input class="score-input" placeholder="--:--.--" onchange="updateScore(this)" data-heat="${heatCounter}" data-lane="${lane}"></td>
+                  <td class="remark-column"><input type="text" class="remark-input" placeholder="備註" data-heat="${heatCounter}" data-lane="${lane}"></td>
                 </tr>
               `;
             }
-          });
+          }
 
           html += '</tbody></table>';
           heatCounter++;
@@ -1041,9 +1210,9 @@ function generateHeats() {
       showMessage('❌ 沒有符合項目順序的選手資料', true);
     } else {
       document.getElementById("output").innerHTML = html;
-      AppState.lastGenerated = { lanes, groups, totalHeats };
-      updateSummary(); // 這裡補齊了原本殘缺的程式碼
-      showMessage('✅ 秩序冊生成成功！');
+      AppState.lastGenerated = { lanes, groups, totalHeats, heatCounter };
+      updateSummary(totalHeats);
+      showMessage('✅ 秩序冊生成成功！', false);
     }
   } catch(error) {
     showMessage(`❌ 生成時發生錯誤：${error.message}`, true);
@@ -1053,34 +1222,204 @@ function generateHeats() {
   }
 }
 
-// ==================== 補齊缺失的函式 ====================
+// ==================== 成績更新 ====================
+function updateScore(input) {
+  const value = input.value.trim();
+  if (value && !value.match(/^\d{1,2}:\d{2}\.\d{2}$/)) {
+    input.style.borderColor = '#e74c3c';
+    alert('⚠️ 時間格式請用 mm:ss.ff (例如 01:23.45)');
+  } else {
+    input.style.borderColor = '#27ae60';
+  }
+}
 
-function updateSummary() {
+// ==================== 匯出成績Excel ====================
+function exportToExcel() {
+  if (!AppState.lastGenerated) {
+    showMessage('❌ 請先點擊「生成秩序冊」按鈕！', true);
+    return;
+  }
+
+  try {
+    const results = [];
+    const tables = document.querySelectorAll('#output table');
+    let currentEvent = '';
+    
+    tables.forEach((table, index) => {
+      const header = table.previousElementSibling;
+      if (header && header.classList.contains('event-header')) {
+        currentEvent = header.textContent.replace('(大會紀錄:', '').split('小')[0].trim();
+      }
+      
+      const rows = table.querySelectorAll('tbody tr');
+      
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 7) {
+          const checked = cells[0].querySelector('input')?.checked || false;
+          const score = cells[5].querySelector('input')?.value || '';
+          const remark = cells[6].querySelector('input')?.value || '';
+          
+          results.push({
+            '項次': currentEvent,
+            '檢錄': checked ? 'V' : '',
+            '水道': cells[1].textContent,
+            '單位': cells[2].textContent,
+            '姓名': cells[3].textContent,
+            '報名成績': cells[4].textContent,
+            '比賽成績': score,
+            '備註': remark
+          });
+        }
+      });
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(results);
+    
+    // 設定欄位寬度
+    const wscols = [
+      { wch: 30 }, // 項次
+      { wch: 5 },  // 檢錄
+      { wch: 5 },  // 水道
+      { wch: 10 }, // 單位
+      { wch: 10 }, // 姓名
+      { wch: 10 }, // 報名成績
+      { wch: 10 }, // 比賽成績
+      { wch: 10 }  // 備註
+    ];
+    ws['!cols'] = wscols;
+    
+    XLSX.utils.book_append_sheet(wb, ws, '比賽成績');
+    XLSX.writeFile(wb, `游泳比賽成績_${new Date().toISOString().slice(0,10)}.xlsx`);
+    
+    showMessage('✅ 成績匯出成功！', false);
+  } catch (error) {
+    showMessage(`❌ 匯出失敗：${error.message}`, true);
+    console.error(error);
+  }
+}
+
+// ==================== 匯出名次總表 ====================
+function exportRankings() {
+  if (!AppState.lastGenerated) {
+    showMessage('❌ 請先點擊「生成秩序冊」按鈕！', true);
+    return;
+  }
+
+  try {
+    const rankings = [];
+    const tables = document.querySelectorAll('#output table');
+    let currentEvent = '';
+    
+    tables.forEach(table => {
+      const header = table.previousElementSibling;
+      if (header && header.classList.contains('event-header')) {
+        currentEvent = header.textContent.replace('(大會紀錄:', '').split('小')[0].trim();
+      }
+      
+      const rows = table.querySelectorAll('tbody tr');
+      const scores = [];
+      
+      // 收集該組所有成績
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 7) {
+          const score = cells[5].querySelector('input')?.value || '';
+          if (score && score !== '--:--.--') {
+            scores.push({
+              name: cells[3].textContent,
+              unit: cells[2].textContent,
+              lane: cells[1].textContent,
+              time: score,
+              seconds: timeToSeconds(score),
+              row: row
+            });
+          }
+        }
+      });
+      
+      // 依成績排序
+      scores.sort((a, b) => a.seconds - b.seconds);
+      
+      // 分配名次
+      let rank = 1;
+      for (let i = 0; i < scores.length; i++) {
+        if (i > 0 && scores[i].seconds === scores[i-1].seconds) {
+          // 並列，名次相同
+        } else {
+          rank = i + 1;
+        }
+        
+        rankings.push({
+          '項目': currentEvent,
+          '名次': rank,
+          '水道': scores[i].lane,
+          '單位': scores[i].unit,
+          '姓名': scores[i].name,
+          '成績': scores[i].time
+        });
+      }
+    });
+
+    if (rankings.length === 0) {
+      showMessage('⚠️ 沒有找到任何比賽成績', true);
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rankings);
+    
+    const wscols = [
+      { wch: 30 }, // 項目
+      { wch: 5 },  // 名次
+      { wch: 5 },  // 水道
+      { wch: 10 }, // 單位
+      { wch: 10 }, // 姓名
+      { wch: 10 }  // 成績
+    ];
+    ws['!cols'] = wscols;
+    
+    XLSX.utils.book_append_sheet(wb, ws, '名次總表');
+    XLSX.writeFile(wb, `游泳比賽名次總表_${new Date().toISOString().slice(0,10)}.xlsx`);
+    
+    showMessage('✅ 名次總表匯出成功！', false);
+  } catch (error) {
+    showMessage(`❌ 匯出失敗：${error.message}`, true);
+    console.error(error);
+  }
+}
+
+// ==================== 摘要更新 ====================
+function updateSummary(heatsCount = 0) {
   const summary = document.getElementById('summary');
   if (!AppState.swimmers || AppState.swimmers.length === 0) {
     summary.innerHTML = '';
     return;
   }
   
-  // 計算不重複選手數
   const uniqueSwimmers = new Set(AppState.swimmers.map(s => s.Name + '_' + s.Unit)).size;
+  const events = new Set(AppState.swimmers.map(s => s.Event)).size;
   
   summary.innerHTML = `
     <div class="summary-stats">
-      <div class="stat-item">👥 總報名人數: ${uniqueSwimmers} 人</div>
+      <div class="stat-item">👥 總選手數: ${uniqueSwimmers} 人</div>
       <div class="stat-item">📝 總報名項次: ${AppState.swimmers.length} 項</div>
+      <div class="stat-item">🏊 比賽項目: ${events} 項</div>
+      ${heatsCount ? `<div class="stat-item">📋 總組數: ${heatsCount} 組</div>` : ''}
     </div>
   `;
 }
 
+// ==================== 賽程時間計算 ====================
 function calcTimeline() {
   if (!AppState.lastGenerated) {
-    alert("請先點擊「生成秩序冊」按鈕！");
+    showMessage('❌ 請先點擊「生成秩序冊」按鈕！', true);
     return;
   }
   
   const totalHeats = AppState.lastGenerated.totalHeats;
-  // 假設一組平均花費 3 分鐘
+  // 每組平均 3 分鐘
   const totalMinutes = totalHeats * 3;
   const hours = Math.floor(totalMinutes / 60);
   const mins = totalMinutes % 60;
@@ -1088,12 +1427,16 @@ function calcTimeline() {
   document.getElementById('timeline').innerHTML = `
     <div class="summary-stats">
       <div class="stat-item" style="background:#e67e22;">
-        ⏱️ 預估總賽程時間: ${hours > 0 ? hours + ' 小時 ' : ''}${mins} 分鐘 (共 ${totalHeats} 組)
+        ⏱️ 預估總賽程時間: ${hours > 0 ? hours + ' 小時 ' : ''}${mins} 分鐘
+      </div>
+      <div class="stat-item" style="background:#27ae60;">
+        📊 共 ${totalHeats} 組比賽
       </div>
     </div>
   `;
 }
 
+// ==================== 列印與下載 ====================
 function printHeats() {
   window.print();
 }
@@ -1103,17 +1446,11 @@ function downloadPDF() {
   window.print();
 }
 
-function exportToExcel() {
-  alert("✅ 匯出功能已觸發！（此為純前端介面，若需完整匯出成績表功能可結合 xlsx.js 的 writeFile）");
-}
-
-function updateScore(input, id) {
-  // 讓控制台可以看見有更新成績
-  console.log(`成績更新 ID[${id}]: `, input.value);
-}
-
-// 初始化預設項目順序
-resetToDefaultOrder();
+// ==================== 初始化 ====================
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Swim Meet Manager initialized');
+  resetToDefaultOrder();
+});
 </script>
 </body>
 </html>
