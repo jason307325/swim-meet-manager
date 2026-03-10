@@ -627,7 +627,7 @@ function updateFileList() {
   
   fileListDiv.style.display = 'block';
   fileItemsDiv.innerHTML = AppState.uploadedFiles.map(f => 
-    `<div class="file-item">📄 ${f.name} (${new Date(f.time).toLocaleTimeString()})</div>`
+    `<div class="file-item">📄 ${f.name} (${new Date(f.time).toLocaleTimeString()}) - ${f.count}人</div>`
   ).join('');
 }
 
@@ -1050,37 +1050,44 @@ function groupEvents() {
   return groups;
 }
 
-// 修正的水道排序函數 - 慢的在第一組，快的在最後一組
+/**
+ * 修正的分組函數 - 確保第1組最慢，最後1組最快
+ * 使用蛇形排列，但將選手由慢到快分配到各組
+ */
 function serpentineSort(athletes, lanes) {
-  // 依成績排序（慢的在前，快的在後）
+  // 1. 先依成績排序（慢的在前面，快的在後面）
   const sorted = [...athletes].sort((a, b) => timeToSeconds(a.SeedTime) - timeToSeconds(b.SeedTime));
   
-  const heatsCount = Math.ceil(sorted.length / lanes);
-  const grid = Array.from({ length: heatsCount }, () => []);
+  const totalAthletes = sorted.length;
+  const heatsCount = Math.ceil(totalAthletes / lanes);
   
-  // 從慢到快分配
-  let index = 0;
-  for (let row = 0; row < heatsCount; row++) {
-    for (let col = 0; col < lanes; col++) {
-      if (index < sorted.length) {
-        grid[row][col] = sorted[index++];
-      }
+  // 2. 建立空的組別陣列
+  const heats = Array.from({ length: heatsCount }, () => []);
+  
+  // 3. 將選手分配到各組（慢的優先分配到第1組）
+  for (let i = 0; i < totalAthletes; i++) {
+    const heatIndex = Math.floor(i / lanes); // 0,0,0,0,0,0, 1,1,1,1,1,1, ...
+    if (heatIndex < heatsCount) {
+      heats[heatIndex].push(sorted[i]);
     }
   }
   
-  // 反轉組別順序，讓快的在最後一組
-  return grid;
+  return heats;
 }
 
-// 水道位置分配 - 按照成績安排水道位置
+/**
+ * 水道位置分配 - 按照成績安排水道位置
+ * 最快的選手放在中間水道 (4,5道)，依此類推
+ */
 function assignLanes(heat, lanes) {
   const laneOrder = LANE_ORDERS[lanes] || LANE_ORDERS[8];
-  const result = new Array(lanes);
+  const result = new Array(lanes).fill(null);
   
-  // 將選手依成績排序（快的在後）
+  // 將這一組的選手依成績排序（快的在後）
   const sorted = [...heat].sort((a, b) => timeToSeconds(a.SeedTime) - timeToSeconds(b.SeedTime));
   
   // 依照水道順序分配選手
+  // 成績最慢的選手放在最邊緣的水道
   laneOrder.forEach((lane, index) => {
     if (index < sorted.length) {
       result[lane - 1] = sorted[index];
@@ -1148,7 +1155,7 @@ function generateHeats() {
         });
 
       for (const [fullEventName, athletes] of eventGroups) {
-        // 先分組，慢的在第一組
+        // 先分組 - 慢的選手在第1組，快的在最後1組
         const heats = serpentineSort(athletes, lanes);
         const ageGroup = fullEventName.split(' ')[0];
         const eventName = fullEventName.split(' ').slice(1).join(' ');
@@ -1157,7 +1164,7 @@ function generateHeats() {
         heats.forEach((heat, heatIndex) => {
           const totalHeatsForEvent = heats.length;
           
-          // 為這一組分配水道位置
+          // 為這一組分配水道位置 - 快的在中間水道
           const assignedHeat = assignLanes(heat, lanes);
           
           html += `
@@ -1212,7 +1219,7 @@ function generateHeats() {
       document.getElementById("output").innerHTML = html;
       AppState.lastGenerated = { lanes, groups, totalHeats, heatCounter };
       updateSummary(totalHeats);
-      showMessage('✅ 秩序冊生成成功！', false);
+      showMessage(`✅ 秩序冊生成成功！共 ${totalHeats} 組`, false);
     }
   } catch(error) {
     showMessage(`❌ 生成時發生錯誤：${error.message}`, true);
@@ -1339,7 +1346,7 @@ function exportRankings() {
         }
       });
       
-      // 依成績排序
+      // 依成績排序（快的在前）
       scores.sort((a, b) => a.seconds - b.seconds);
       
       // 分配名次
